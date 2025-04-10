@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Chess Information</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        padding: 50px;
+      }
+      button {
+        margin: 20px;
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>How to Play Chess</h1>
+    <p>Chess is a strategy game played between two players. The goal is to checkmate your opponent's king.</p>
+    <p>Learn more about the rules and strategies online!</p>
+    <button onclick="playGame()">Play</button>
+    <button onclick="viewStats()">View Stats</button>
+    <script>
+      function playGame() {
+        window.location.href = "play.html";
+      }
+      function viewStats() {
+        alert("Stats feature is under development!");
+      }
+    </script>
+  </body>
+</html>
