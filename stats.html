@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Player Stats</title>
+    <meta name="viewport", content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <h1>Player Stats</h1>
+    <div class="graph-placeholder">
+      <p>Graph showing player stats will be displayed here.</p>
+    </div>
+    <div class="navigation-buttons">
+      <button onclick="goBack()">Back</button>
+      <button onclick="goHome()">Home</button>
+    </div>
+    <script>
+      function goBack() {
+        window.history.back();
+      }
+      function goHome() {
+        window.location.href = "index.html";
+      }
+    </script>
+  </body>
+</html>
