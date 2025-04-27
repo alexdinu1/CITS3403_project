@@ -1,8 +1,9 @@
 body {
     font-family: Arial, sans-serif;
     text-align: center;
-    padding: 5%;
     background-color: grey;
+    padding-top:5%;
+    padding-bottom: 5%;
 }
 
 form {
@@ -84,4 +85,38 @@ button:hover {
         font-size: 0.9em;
         padding: 0.8em 1.5em;
     }
+<<<<<<< Updated upstream
 }
+=======
+
+    
+}
+
+/* Change the colors of the chessboard squares */
+.square-55d63.white-1e1d7 {
+    background-color: #EEEED2; /* Light beige */
+  }
+  
+  .square-55d63.black-3c85d {
+    background-color: #769656; /* Saddle brown */
+  }
+
+h1 {
+    font-family: 'Lora', serif;
+    color:white;
+    font-weight: bold;
+    font-kerning: normal;
+}
+
+h2 {
+    color:white;
+    font-kerning: normal;
+    font-size:x-large;
+}
+
+.chart-container {
+    background-color: white; 
+    border-radius: 15px; 
+    padding: 20px;
+}
+>>>>>>> Stashed changes
