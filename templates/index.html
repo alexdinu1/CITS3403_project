@@ -10,9 +10,8 @@
     >
     <!-- Add Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css">
-
-
+    <!-- Add Custom Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
   </head>
   <body>
     <div class="form text-center">
@@ -29,7 +28,7 @@
     <script>
       function redirectToInfo(event) {
         event.preventDefault();
-        window.location.href = "info.html";
+        window.location.href = "{{ url_for('info') }}";
       }
     </script>
   </body>
