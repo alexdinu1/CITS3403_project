@@ -25,6 +25,6 @@
     "build": "standard lib/chessboard.js && node scripts/build.js",
     "standard": "standard --fix lib/*.js website/js/*.js",
     "website": "node scripts/website.js",
-    "start": "node index.js"
+    "start": "node index.html"
   }
 }

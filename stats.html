@@ -1,26 +1,145 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Player Stats</title>
-    <meta name="viewport", content="width=device-width, initial-scale=1.0">
+
+    <!-- Add Bootstrap -->
+    <link 
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" 
+      rel="stylesheet"
+    />
+
+    <!-- Add Google Fonts -->
+    <link 
+      href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&display=swap" 
+      rel="stylesheet"
+    />
+
+    <!-- Add Custom Styles -->
     <link rel="stylesheet" href="css/styles.css" />
+
+    <!-- Add Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body {
+        padding-top:2%;
+        padding-bottom: 2%;
+      }
+      .section-container {
+        width: 50%;
+        margin: 0 auto; /* Centers the section horizontally */
+      }
+      .card-container {
+        display: flex;
+        gap: 1rem;
+      }
+      .card {
+        flex: 1;
+        background-color: #f8f9fa;
+        border-radius: 15px;
+        padding: 1rem;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+      @media (max-width: 768px) {
+        .section-container {
+          width: 90%; /* Full width on mobile */
+        }
+        .card-container {
+          display: block; /* Stack cards vertically */
+        }
+        .card {
+          margin-bottom: 1rem; /* Add space between cards */
+        }
+        .section-container {
+          width: 100%; /* Full width on mobile */
+        }
+        .chart-container {
+          width: 100%; /* Full width on mobile */
+          height: 200%;
+          padding-left: 1rem;
+        }
+        #lastPlayedChart,
+        #averageChart {
+          height: 200% !important; /* Ensure the canvas fills the container */
+        }
+      }
+    </style>
   </head>
   <body>
-    <h1>Player Stats</h1>
-    <div class="graph-placeholder">
-      <p>Graph showing player stats will be displayed here.</p>
-    </div>
-    <div class="navigation-buttons">
-      <button onclick="goBack()">Back</button>
-      <button onclick="goHome()">Home</button>
-    </div>
-    <script>
-      function goBack() {
-        window.history.back();
-      }
-      function goHome() {
-        window.location.href = "index.html";
-      }
-    </script>
+    <header class="text-center my-0">
+      <h1 class="fw-bold">Player Stats</h1>
+      <p>Analyze your performance and share your progress!</p>
+    </header>
+
+    <main class="container">
+      <!-- Last Played Section -->
+      <section class="section-container mb-5">
+        <h2 class="text-center">Last Played</h2>
+        <div class="chart-container mb-4">
+          <canvas id="lastPlayedChart"></canvas>
+        </div>
+        <div class="card-container">
+          <!-- Stats Breakdown Card -->
+          <div class="card">
+            <h4>Stats Breakdown</h4>
+            <ul class="list-unstyled" style="text-align: left;">
+              <li><strong>Best Move:</strong> Move 7 (Score: 9)</li>
+              <li><strong>Worst Move:</strong> Move 22 (Score: 1)</li>
+              <li><strong>Average Score:</strong> 6.5</li>
+            </ul>
+            <div class="d-flex justify-content-center">
+              <button class="btn btn-primary w-30" onclick="shareStats('average')">Share</button>
+            </div>
+          </div>
+          <!-- Compliment Card -->
+          <div class="card text-center">
+            <h4>Game Insights</h4>
+            <ul style="text-align: left;">
+              <li>Great opening and starting game.</li>
+              <li>A blunder caused the loss of an important piece that led to a checkmate.</li>
+              <li>Keep practicing and improving your skills!</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Average Section -->
+      <section class="section-container mb-5">
+        <h2 class="text-center">Average</h2>
+        <div class="chart-container mb-4">
+          <canvas id="averageChart"></canvas>
+        </div>
+        <div class="card-container">
+          <!-- Stats Breakdown Card -->
+          <div class="card">
+            <h4>Stats Breakdown</h4>
+            <ul class="list-unstyled" style="text-align: left;">
+              <li><strong>Highest Average:</strong> Move 4 (Score: 7)</li>
+              <li><strong>Lowest Average:</strong> Move 20 (Score: 4)</li>
+              <li><strong>Overall Average:</strong> 5.5</li>
+            </ul>
+            <div class="d-flex justify-content-center">
+              <button class="btn btn-primary w-30" onclick="shareStats('average')">Share</button>
+            </div>
+          </div>
+          <!-- Compliment Card -->
+          <div class="card text-center">
+            <h4>Game Insights</h4>
+            <p style="text-align: justify;">You are improving your starting game, however you need to keep
+              practicing your middle game. </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Navigation Buttons -->
+      <div class="text-center mt-4">
+        <button class="btn btn-secondary me-2" onclick="goBack()">Back</button>
+        <button class="btn btn-primary" onclick="goHome()">Home</button>
+      </div>
+    </main>
+
+    <script src="js/stats.js"></script>
   </body>
 </html>

@@ -2,7 +2,7 @@
 <html>
   <head>
     <title>Chess</title>
-    <meta name="viewport", content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Bootstrap CSS -->
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
@@ -25,17 +25,26 @@
 
     <style>
       body {
-        padding-top: 40px;
+        padding: 0 5% 0 5%;
+      }
+
+      #board1 {
+        width: 100%;
+        max-width: 65vh;
+        margin: auto;
+      }
+
+      @media (max-width: 768px) {
+        #board1 {
+          width: 100%;
+          max-width: 100vh;
+        }
+        
       }
     </style>
   </head>
   <body>
-    <div class="container text-center">
-      <h1 class="mb-4">Play Chess</h1>
-    </div>
-
-
-    <div class="column justify-content-center">
+    <div class="column justify-content-center" style="height: 50px; margin-top: 5vh;">
       <button id="playWhite" class="btn btn-primary">Play as White</button>
       <button id="playBlack" class="btn btn-dark m-2">Play as Black</button>
       <button id="reset" class="btn btn-danger">Reset</button>
@@ -43,7 +52,8 @@
 
     <br>
 
-    <div id="board1" style="width: 100%; max-width: 500px; margin: auto;"></div>
+
+    <div id="board1"></div>
 
     <br>
 
@@ -53,6 +63,10 @@
 
     <script>
       let board1;
+      let playerMoved = false; // Track if the player has made a move
+      let gameStarted = false; // Track if the "Play Game" button has been pressed
+      let computerMoved = false; // Track if the computer has made a move
+      let moveCount = 0; // Track the number of moves made
 
       // Function to initialize the board with the chosen orientation
       function initializeBoard(orientation) {
@@ -61,7 +75,15 @@
           draggable: true,
           dropOffBoard: 'trash',
           responsive: true,
-          orientation: orientation // Set the board orientation
+          orientation: orientation, // Set the board orientation
+          onDrop: (source, target) => {
+            // Triggered when a piece is dropped
+            if (gameStarted) {
+              playerMoved = true; // Mark that the player has made a move
+              handlePlayerMove(source, target);
+              moveCount++; // Increment the move count
+            }
+          }
         });
 
         // Adjust on resize
@@ -81,6 +103,30 @@
 
       $('#reset').click(() => {
         board1.start(); // Reset to the starting position
+        playerMoved = false; // Reset the move flag
+        gameStarted = false; // Reset the game started flag
+      });
+
+      // Handle Play Game button click
+      $('#playGame').click(() => {
+        // Set the gameStarted flag to true
+        gameStarted = true;
+
+        // Fade out all other buttons
+        $('.column button').fadeOut();
+
+        $('#board1').parent().animate({ marginTop: '-10vh' }, 500);
+
+        // Replace the Play Game button with difficulty buttons
+        $('#playGame').fadeOut(() => {
+          $('#playGame').replaceWith(`
+            <div id="difficultyButtons">
+              <button class="btn btn-success fs-5 m-1">Easy</button>
+              <button class="btn btn-warning fs-5 m-1">Medium</button>
+              <button class="btn btn-danger fs-5 m-1">Hard</button>
+            </div>
+          `);
+        });
       });
 
       // Initialize the board with a default orientation (e.g., white)
