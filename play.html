@@ -92,48 +92,6 @@
         });
       }
 
-      // Function to handle the player's move
-      function handlePlayerMove(source, target) {
-        // Log the move
-        console.log(`Player moved from ${source} to ${target}`);
-
-        // Update the infoCard with the player's move
-        if ($('#infoCard').length) {
-          if (source === 'd2' && target === 'd4') {
-            $('#infoCard').html(`
-              <div>
-                <strong>Pawn to d2</strong> is a strong opening that allows you to develop your 
-                pieces early on.
-                <br>
-                <strong>Move Score:</strong> 9
-                <br>
-                It is your turn to move.
-              </div>
-            `);
-          } else {
-            $('#infoCard').html(`
-              <div>
-                You moved from <strong>${source}</strong> to <strong>${target}</strong>.
-                <br>
-                <strong>Move Score:</strong> 5
-                <br>
-                It is your turn to move.
-              </div>
-            `);
-          }
-        }
-
-        // If the player has moved and the game has started, make the black pawn move to a6
-        if (playerMoved && gameStarted) {
-          setTimeout(() => {
-            board1.move('a7-a6'); // Move the black pawn from a7 to a6
-            playerMoved = false; // Reset the flag for the next move
-
-            // Do not update the infoCard here to ensure it only reacts to player moves
-          }, 2000); // Add a slight delay for better user experience
-        }
-      }
-
       // Event listeners for the buttons
       $('#playWhite').click(() => {
         initializeBoard('white'); // Player chooses white
@@ -166,24 +124,6 @@
               <button class="btn btn-success fs-5 m-1">Easy</button>
               <button class="btn btn-warning fs-5 m-1">Medium</button>
               <button class="btn btn-danger fs-5 m-1">Hard</button>
-            </div>
-          `);
-        });
-      });
-
-      // Handle difficulty button clicks
-      $(document).on('click', '#difficultyButtons button', function() {
-        $('#difficultyButtons').fadeOut(() => {
-          $('#difficultyButtons').replaceWith(`
-            <div class="card text-start" id="infoCard" style="max-width: 65vh; margin: auto; padding: 1rem;">
-              You selected ${$(this).text()} difficulty!
-              <br>
-              It is your turn to move.
-            </div>
-            <div id="backButtons">
-              <button class="btn btn-primary fs-5 m-2" id="hintButton">Hint</button>
-              <button class="btn btn-warning fs-5 m-2" id="undoButton">Undo</button>
-              <button class="btn btn-danger fs-5 m-2" id="resignButton" onclick="location.href='stats.html'">Resign</button>
             </div>
           `);
         });
