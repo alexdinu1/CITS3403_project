@@ -116,3 +116,27 @@ h2 {
     border-radius: 15px; 
     padding: 20px;
 }
+
+.valid-move-circle {
+    width: 30%;
+    height: 30%;
+    background-color: rgba(0, 0, 0, 0.25); /* Semi-transparent black */
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none; /* Prevent interaction with the circle */
+  }
+
+  .valid-move-circle-capture {
+    width: 90%; /* Larger size for capture moves */
+    height: 90%;
+    background-color: transparent; /* Transparent inside */
+    border: 7px solid rgba(0, 0, 0, 0.2); /* Thin red border */
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }

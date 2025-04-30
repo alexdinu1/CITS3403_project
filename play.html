@@ -22,7 +22,7 @@
 
     <!-- Chessboard JS -->
     <script src="js/chessboard-1.0.0.min.js"></script>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <style>
       body {
         padding: 0 5% 0 5%;
@@ -63,61 +63,114 @@
 
     <script>
       let board1;
-      let playerMoved = false; // Track if the player has made a move
-      let gameStarted = false; // Track if the "Play Game" button has been pressed
-      let computerMoved = false; // Track if the computer has made a move
-      let moveCount = 0; // Track the number of moves made
-
-      // Function to initialize the board with the chosen orientation
+      let game = new Chess(); // Use chess.js to manage game state
+      let selectedSquare = null;
+      let boardOrientation = 'white'; // Default
+    
+      // Initialize board with custom click-to-move interaction
       function initializeBoard(orientation) {
+        boardOrientation = orientation;
+        game.reset(); // Reset game state
+        selectedSquare = null;
+
         board1 = ChessBoard('board1', {
           position: 'start',
-          draggable: true,
-          dropOffBoard: 'trash',
-          responsive: true,
-          orientation: orientation, // Set the board orientation
-          onDrop: (source, target) => {
-            // Triggered when a piece is dropped
-            if (gameStarted) {
-              playerMoved = true; // Mark that the player has made a move
-              handlePlayerMove(source, target);
-              moveCount++; // Increment the move count
-            }
+          draggable: false, // Disable dragging
+          orientation: orientation,
+          pieceTheme: 'img/chesspieces/wikipedia/{piece}.png', // Optional: your theme path
+        });
+
+        // Bind click events to squares
+        $('#board1 .square-55d63').off('click').on('click', function () {
+          const square = $(this).data('square'); // Get the square from the clicked element
+          onSquareClick(square);
+        });
+
+        $(window).resize(() => board1.resize());
+      }
+    
+      function onSquareClick(square) {
+        const moves = game.moves({ square, verbose: true });
+    
+        // If no piece selected yet or clicked own piece
+        if (!selectedSquare) {
+          if (moves.length === 0) return; // No moves = not a valid piece
+          selectedSquare = square;
+          highlightSquares(square, moves.map(m => m.to));
+        } else {
+          // Try move
+          const move = game.move({ from: selectedSquare, to: square });
+          if (move === null) {
+            // Invalid move, reset selection
+            selectedSquare = null;
+            removeHighlights();
+            return;
+          }
+    
+          board1.position(game.fen());
+          selectedSquare = null;
+          removeHighlights();
+        }
+      }
+    
+      // Highlight helper
+      function highlightSquares(from, toSquares) {
+        removeHighlights();
+
+        // Highlight the selected square with the yellowish outline
+        $(`#board1 .square-${from}`).addClass('highlight1-32417');
+
+        // Add a circle to valid move squares
+        toSquares.forEach(square => {
+          const targetSquare = $(`#board1 .square-${square}`);
+          const piece = game.get(square); // Check if there's a piece on the target square
+
+          if (piece) {
+            // If a piece can be captured, use the capture circle style
+            targetSquare.append('<div class="valid-move-circle valid-move-circle-capture"></div>');
+          } else {
+            // Otherwise, use the normal circle style
+            targetSquare.append('<div class="valid-move-circle"></div>');
           }
         });
-
-        // Adjust on resize
-        $(window).resize(() => {
-          board1.resize();
-        });
       }
+    
+      function removeHighlights() {
+        // Remove the yellowish outline
+        $('#board1 .square-55d63').removeClass('highlight1-32417');
 
-      // Event listeners for the buttons
-      $('#playWhite').click(() => {
-        initializeBoard('white'); // Player chooses white
-      });
-
-      $('#playBlack').click(() => {
-        initializeBoard('black'); // Player chooses black
-      });
-
+        // Remove all valid move circles
+        $('#board1 .valid-move-circle').remove();
+      }
+    
+      // Styling for highlights
+      const highlightStyle = `
+        <style>
+          .highlight-from {
+            background-color: rgba(255, 255, 0, 0.6) !important;
+          }
+    
+          .highlight-to {
+            background-color: rgba(0, 255, 0, 0.4) !important;
+          }
+        </style>
+      `;
+      $('head').append(highlightStyle);
+    
+      // Buttons
+      $('#playWhite').click(() => initializeBoard('white'));
+      $('#playBlack').click(() => initializeBoard('black'));
+    
       $('#reset').click(() => {
-        board1.start(); // Reset to the starting position
-        playerMoved = false; // Reset the move flag
-        gameStarted = false; // Reset the game started flag
+        game.reset();
+        board1.start();
+        selectedSquare = null;
+        removeHighlights();
       });
-
-      // Handle Play Game button click
+    
       $('#playGame').click(() => {
-        // Set the gameStarted flag to true
-        gameStarted = true;
-
-        // Fade out all other buttons
         $('.column button').fadeOut();
-
         $('#board1').parent().animate({ marginTop: '-10vh' }, 500);
-
-        // Replace the Play Game button with difficulty buttons
         $('#playGame').fadeOut(() => {
           $('#playGame').replaceWith(`
             <div id="difficultyButtons">
@@ -128,8 +181,8 @@
           `);
         });
       });
-
-      // Initialize the board with a default orientation (e.g., white)
+    
+      // Initialize on page load
       initializeBoard('white');
     </script>
   </body>
