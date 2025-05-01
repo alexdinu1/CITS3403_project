@@ -18,7 +18,7 @@
     />
 
     <!-- Add Custom Styles -->
-    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
 
     <!-- Add Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -140,6 +140,7 @@
       </div>
     </main>
 
-    <script src="js/stats.js"></script>
+    <!-- Add Custom JS -->
+    <script src="{{ url_for('static', filename='js/stats.js') }}"></script>
   </body>
 </html>
