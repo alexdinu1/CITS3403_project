@@ -1,156 +1,165 @@
 let board1;
-      let game = new Chess(); // Use chess.js to manage game state
-      let selectedSquare = null;
-      let boardOrientation = 'white'; // Default
-      let moveValidationEnabled = false; // Flag to enable/disable move validation
+let game = new Chess(); // Use chess.js to manage game state
+let selectedSquare = null;
+let boardOrientation = 'white'; // Default
+let moveValidationEnabled = false; // Flag to enable/disable move validation
 
-      // Initialize board with custom click-to-move interaction
-      function initializeBoard(orientation) {
-        boardOrientation = orientation;
-        game.reset(); // Reset game state
-        selectedSquare = null;
+// Initialize board with custom click-to-move interaction
+function initializeBoard(orientation) {
+    boardOrientation = orientation;
+    game.reset(); // Reset game state
+    selectedSquare = null;
 
-        board1 = ChessBoard('board1', {
-          position: 'start',
-          draggable: false, // Disable dragging
-          orientation: orientation,
-          pieceTheme: '/static/img/chesspieces/wikipedia/{piece}.png', // Optional: your theme path
-        });
+    board1 = ChessBoard('board1', {
+        position: 'start',
+        draggable: false, // Disable dragging
+        orientation: orientation,
+        pieceTheme: '/static/img/chesspieces/wikipedia/{piece}.png', // Optional: your theme path
+    });
 
-        // Bind click events to squares
-        $('#board1 .square-55d63').off('click').on('click', function () {
-          const square = $(this).data('square'); // Get the square from the clicked element
-          onSquareClick(square);
-        });
+    // Bind click events to squares
+    $('#board1 .square-55d63').off('click').on('click', function () {
+        const square = $(this).data('square'); // Get the square from the clicked element
+        onSquareClick(square);
+    });
 
-        $(window).resize(() => board1.resize());
-      }
+    $(window).resize(() => board1.resize());
+}
 
-      function onSquareClick(square) {
-        if (moveValidationEnabled) {
-          // Move validation logic
-          const moves = game.moves({ square, verbose: true });
+function onSquareClick(square) {
+    if (moveValidationEnabled) {
+        const moves = game.moves({ square, verbose: true });
 
-          // If no piece selected yet or clicked own piece
-          if (!selectedSquare) {
-            if (moves.length === 0) return; // No moves = not a valid piece
+        if (!selectedSquare) {
+            if (moves.length === 0) return;
             selectedSquare = square;
             highlightSquares(square, moves.map(m => m.to));
-          } else {
-            // Try move
+        } else {
             const move = game.move({ from: selectedSquare, to: square });
             if (move === null) {
-              // Invalid move, reset selection
-              selectedSquare = null;
-              removeHighlights();
-              return;
+                selectedSquare = null;
+                removeHighlights();
+                return;
             }
 
             board1.position(game.fen());
             selectedSquare = null;
             removeHighlights();
-          }
-        } else {
-          // Unrestricted movement logic
-          if (!selectedSquare) {
+        }
+    } else {
+        if (!selectedSquare) {
             selectedSquare = square;
-            highlightSelectedSquare(square); // Highlight the selected square
-          } else {
-            // Move the piece to the clicked square (even outside the board)
+            highlightSelectedSquare(square);
+        } else {
             const piece = game.get(selectedSquare);
             if (piece) {
-              game.remove(selectedSquare); // Remove the piece from the original square
-              game.put(piece, square); // Place the piece on the new square
+                game.remove(selectedSquare);
+                game.put(piece, square);
             }
             board1.position(game.fen());
             selectedSquare = null;
-            removeHighlights(); // Clear highlights after the move
-          }
+            removeHighlights();
         }
-      }
+    }
+}
 
-      function highlightSelectedSquare(square) {
-        removeHighlights(); // Clear previous highlights
-        $(`#board1 .square-${square}`).addClass('highlight1-32417'); // Highlight the selected square
-      }
+function highlightSelectedSquare(square) {
+    removeHighlights();
+    $(`#board1 .square-${square}`).addClass('highlight1-32417');
+}
 
-      // Highlight helper
-      function highlightSquares(from, toSquares) {
-        removeHighlights();
+function highlightSquares(from, toSquares) {
+    removeHighlights();
+    $(`#board1 .square-${from}`).addClass('highlight1-32417');
 
-        // Highlight the selected square with the yellowish outline
-        $(`#board1 .square-${from}`).addClass('highlight1-32417');
+    toSquares.forEach(square => {
+        const targetSquare = $(`#board1 .square-${square}`);
+        const piece = game.get(square);
 
-        // Add a circle to valid move squares
-        toSquares.forEach(square => {
-          const targetSquare = $(`#board1 .square-${square}`);
-          const piece = game.get(square); // Check if there's a piece on the target square
-
-          if (piece) {
-            // If a piece can be captured, use the capture circle style
+        if (piece) {
             targetSquare.append('<div class="valid-move-circle valid-move-circle-capture"></div>');
-          } else {
-            // Otherwise, use the normal circle style
+        } else {
             targetSquare.append('<div class="valid-move-circle"></div>');
-          }
-        });
-      }
+        }
+    });
+}
 
-      function removeHighlights() {
-        // Remove the yellowish outline
-        $('#board1 .square-55d63').removeClass('highlight1-32417');
+function removeHighlights() {
+    $('#board1 .square-55d63').removeClass('highlight1-32417');
+    $('#board1 .valid-move-circle').remove();
+}
 
-        // Remove all valid move circles
-        $('#board1 .valid-move-circle').remove();
-      }
+// Top control buttons
+$('#playWhite').click(() => initializeBoard('white'));
+$('#playBlack').click(() => initializeBoard('black'));
 
-      // Buttons
-      $('#playWhite').click(() => initializeBoard('white'));
-      $('#playBlack').click(() => initializeBoard('black'));
+$('#reset').click(() => {
+    game.reset();
+    board1.start();
+    selectedSquare = null;
+    removeHighlights();
+    moveValidationEnabled = false;
+});
 
-      $('#reset').click(() => {
-        game.reset();
-        board1.start();
-        selectedSquare = null;
-        removeHighlights();
-        moveValidationEnabled = false; // Disable move validation on reset
-      });
+// Main game flow
 
-      $('#playGame').click(() => {
+function setupPlayButton() {
+    $('.container.text-center').html(`
+        <button id="playGame" class="btn btn-success btn-lg fs-3">Play Game</button>
+    `);
+
+    $('#playGame').click(() => {
         $('.column button').fadeOut();
         $('#board1').parent().animate({ marginTop: '-10vh' }, 500);
         $('#playGame').fadeOut(() => {
-          $('#playGame').replaceWith(`
-            <div id="difficultyButtons">
-              <button class="btn btn-success fs-5 m-1" onclick="startGame('easy')">Easy</button>
-              <button class="btn btn-warning fs-5 m-1" onclick="startGame('medium')">Medium</button>
-              <button class="btn btn-danger fs-5 m-1" onclick="startGame('hard')">Hard</button>
-            </div>
-          `);
+            setupDifficultyButtons();
         });
-      });
+    });
 
-      function startGame(difficulty) {
-        moveValidationEnabled = true; // Enable move validation
-        console.log(`Game started with difficulty: ${difficulty}`);
-        $('#difficultyButtons').fadeOut();
-      }
+    $('.column button').fadeIn();
+}
 
-      // Detect clicks outside the board
-    $(document).on('click', function (e) {
-        const isInsideBoard = $(e.target).closest('#board1').length > 0;
-    
-        // Only if move validation is OFF and a piece is selected
-        if (!isInsideBoard && !moveValidationEnabled && selectedSquare) {
+function setupDifficultyButtons() {
+    $('.container.text-center').html(`
+        <div id="difficultyButtons">
+            <button class="btn btn-success fs-5 m-1" onclick="startGame('easy')">Easy</button>
+            <button class="btn btn-warning fs-5 m-1" onclick="startGame('medium')">Medium</button>
+            <button class="btn btn-danger fs-5 m-1" onclick="startGame('hard')">Hard</button>
+            <br>
+            <button class="btn btn-primary fs-5 m-4" id="backButton">Back</button>
+        </div>
+    `);
+
+    $('#backButton').click(() => {
+        $('#difficultyButtons').fadeOut(() => {
+            $('#board1').parent().animate({ marginTop: '0' }, 500, () => {
+                setupPlayButton();
+            });
+        });
+    });
+}
+
+function startGame(difficulty) {
+    moveValidationEnabled = true;
+    console.log(`Game started with difficulty: ${difficulty}`);
+    $('#difficultyButtons').fadeOut();
+}
+
+// Detect clicks outside the board
+$(document).on('click', function (e) {
+    const isInsideBoard = $(e.target).closest('#board1').length > 0;
+
+    if (!isInsideBoard && !moveValidationEnabled && selectedSquare) {
         const piece = game.get(selectedSquare);
         if (piece) {
-            game.remove(selectedSquare); // Kick the piece off
+            game.remove(selectedSquare);
             board1.position(game.fen());
         }
         selectedSquare = null;
         removeHighlights();
-        }
-    });
+    }
+});
 
-      // Initialize on page load
-      initializeBoard('white');
+// Initialize on page load
+initializeBoard('white');
+setupPlayButton();
