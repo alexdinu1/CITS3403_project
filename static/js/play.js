@@ -3,6 +3,7 @@ let game = new Chess(); // Use chess.js to manage game state
 let selectedSquare = null;
 let boardOrientation = 'white'; // Default
 let moveValidationEnabled = false; // Flag to enable/disable move validation
+let selectedDifficulty = 'medium'; // Default difficulty
 
 // Initialize board with custom click-to-move interaction
 function initializeBoard(orientation) {
@@ -24,7 +25,69 @@ function initializeBoard(orientation) {
     });
 
     $(window).resize(() => board1.resize());
+
+    // If playing as black, let Stockfish (white) make the first move
+    if (orientation === 'black') {
+        console.log("User selected to play as Black. Stockfish (White) will make the first move.");
+        playAIMove(); // Trigger Stockfish's first move
+    }
 }
+
+async function getAIMove(fen) {
+    console.log("Sending FEN to Stockfish:", fen); // Log the FEN being sent to the backend
+    console.log("Selected difficulty:", selectedDifficulty); // Log the selected difficulty
+    try {
+        const response = await fetch('/get_ai_move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fen, difficulty: selectedDifficulty }) // Include difficulty
+        });
+
+        const data = await response.json();
+        if (data.error) {
+            console.error("Error received from Stockfish:", data.error); // Log any errors from Stockfish
+            return null;
+        }
+
+        console.log("Stockfish move received:", data.move); // Log the move received from Stockfish
+        return data.move; // AI's move in UCI format
+    } catch (error) {
+        console.error("Error fetching AI move:", error); // Log any network or fetch errors
+        return null;
+    }
+}
+
+async function playAIMove() {
+    const fenBefore = game.fen(); // Save FEN for debugging
+    const aiMove = await getAIMove(fenBefore);
+
+    console.log("Current FEN:", fenBefore);
+    console.log("AI Move (UCI):", aiMove);
+
+    if (aiMove) {
+        console.log("AI Move (UCI):", aiMove);
+
+        // Add a delay before applying the AI move
+        setTimeout(() => {
+            const moveResult = game.move({
+                from: aiMove.slice(0, 2),
+                to: aiMove.slice(2, 4),
+                promotion: 'q' // Always promote to queen by default
+            });
+
+            if (moveResult === null) {
+                console.error("Invalid AI move:", aiMove);
+            } else {
+                console.log("Move applied:", moveResult);
+                board1.position(game.fen());
+                console.log("Board updated after AI move.");
+            }
+        }, 1000); // Delay of 1000ms (1 second)
+    } else {
+        console.error("No AI move returned.");
+    }
+}
+
 
 function onSquareClick(square) {
     if (moveValidationEnabled) {
@@ -45,6 +108,9 @@ function onSquareClick(square) {
             board1.position(game.fen());
             selectedSquare = null;
             removeHighlights();
+
+            // Trigger AI move after player's move
+            playAIMove();
         }
     } else {
         if (!selectedSquare) {
@@ -140,9 +206,25 @@ function setupDifficultyButtons() {
 }
 
 function startGame(difficulty) {
+    selectedDifficulty = difficulty; // Store the selected difficulty
     moveValidationEnabled = true;
     console.log(`Game started with difficulty: ${difficulty}`);
-    $('#difficultyButtons').fadeOut();
+    $('#difficultyButtons').fadeOut(() => {
+        // Add the Resign button after difficulty buttons disappear
+        $('.container.text-center').html(`
+            <button id="resignButton" class="btn btn-danger btn-lg mt-3 fs-5">
+                <i class="bi bi-flag-fill"></i> Resign
+            </button>
+        `);
+
+        // Fade in the Resign button
+        $('#resignButton').fadeIn();
+
+        // Add click event to redirect to the stats page
+        $('#resignButton').click(() => {
+            window.location.href = '/stats'; // Redirect to the stats page
+        });
+    });
 }
 
 // Detect clicks outside the board
