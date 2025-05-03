@@ -168,6 +168,8 @@ $('#reset').click(() => {
 function setupPlayButton() {
     $('.container.text-center').html(`
         <button id="playGame" class="btn btn-success btn-lg fs-3">Play Game</button>
+        <br>
+        <button class="btn btn-primary fs-5 m-4" id="BackButton">Back</button>
     `);
 
     $('#playGame').click(() => {
@@ -179,6 +181,10 @@ function setupPlayButton() {
     });
 
     $('.column button').fadeIn();
+
+    $('#BackButton').click(() => {
+        window.history.back();
+    });
 }
 
 function setupDifficultyButtons() {
