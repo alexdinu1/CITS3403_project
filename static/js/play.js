@@ -26,11 +26,7 @@ function initializeBoard(orientation) {
 
     $(window).resize(() => board1.resize());
 
-    // If playing as black, let Stockfish (white) make the first move
-    if (orientation === 'black') {
-        console.log("User selected to play as Black. Stockfish (White) will make the first move.");
-        playAIMove(); // Trigger Stockfish's first move
-    }
+    console.log(`Board initialized with orientation: ${orientation}`);
 }
 
 async function getAIMove(fen) {
@@ -209,6 +205,7 @@ function startGame(difficulty) {
     selectedDifficulty = difficulty; // Store the selected difficulty
     moveValidationEnabled = true;
     console.log(`Game started with difficulty: ${difficulty}`);
+
     $('#difficultyButtons').fadeOut(() => {
         // Add the Resign button after difficulty buttons disappear
         $('.container.text-center').html(`
@@ -224,6 +221,12 @@ function startGame(difficulty) {
         $('#resignButton').click(() => {
             window.location.href = '/stats'; // Redirect to the stats page
         });
+
+        // If playing as black, let Stockfish (white) make the first move
+        if (boardOrientation === 'black') {
+            console.log("Stockfish (White) will make the first move.");
+            playAIMove(); // Trigger Stockfish's first move
+        }
     });
 }
 
