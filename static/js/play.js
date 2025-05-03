@@ -4,6 +4,7 @@ let selectedSquare = null;
 let boardOrientation = 'white'; // Default
 let moveValidationEnabled = false; // Flag to enable/disable move validation
 let selectedDifficulty = 'medium'; // Default difficulty
+let playPressed = false; // Flag to check if the play button was pressed
 
 // Initialize board with custom click-to-move interaction
 function initializeBoard(orientation) {
@@ -169,20 +170,21 @@ function setupPlayButton() {
     $('.container.text-center').html(`
         <button id="playGame" class="btn btn-success btn-lg fs-3">Play Game</button>
         <br>
-        <button class="btn btn-primary fs-5 m-4" id="BackButton">Back</button>
+        <button class="btn btn-primary fs-5 m-4" id="backButton">Back</button>
     `);
 
     $('#playGame').click(() => {
+        playPressed = true;
         $('.column button').fadeOut();
         $('#board1').parent().animate({ marginTop: '-10vh' }, 500);
-        $('#playGame').fadeOut(() => {
+        $('#playGame, #backButton').fadeOut(() => {
             setupDifficultyButtons();
         });
     });
 
     $('.column button').fadeIn();
 
-    $('#BackButton').click(() => {
+    $('#backButton').click(() => {
         window.history.back();
     });
 }
@@ -240,7 +242,8 @@ function startGame(difficulty) {
 $(document).on('click', function (e) {
     const isInsideBoard = $(e.target).closest('#board1').length > 0;
 
-    if (!isInsideBoard && !moveValidationEnabled && selectedSquare) {
+    if (!isInsideBoard && !moveValidationEnabled && selectedSquare && !playPressed) {
+        // If clicked outside the board and not in move validation mode, remove the piece
         const piece = game.get(selectedSquare);
         if (piece) {
             game.remove(selectedSquare);
