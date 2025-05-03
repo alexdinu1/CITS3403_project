@@ -5,7 +5,7 @@ function goBack() {
 
   // Function to go to the home page
   function goHome() {
-    window.location.href = "templates/index.html";
+    window.location.href = "index.html";
   }
 
   // Function to share stats
