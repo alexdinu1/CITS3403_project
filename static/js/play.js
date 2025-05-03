@@ -6,17 +6,25 @@ let moveValidationEnabled = false; // Flag to enable/disable move validation
 let selectedDifficulty = 'medium'; // Default difficulty
 let playPressed = false; // Flag to check if the play button was pressed
 
+let moveHistory = []; // Track the history of FEN positions
+let currentMoveIndex = 0; // Track the current position in the history
+
 // Initialize board with custom click-to-move interaction
 function initializeBoard(orientation) {
     boardOrientation = orientation;
     game.reset(); // Reset game state
     selectedSquare = null;
 
+    // Reset move history when board initializes
+    moveHistory = [game.fen()];
+    currentMoveIndex = 0;
+
     board1 = ChessBoard('board1', {
         position: 'start',
         draggable: false, // Disable dragging
         orientation: orientation,
         pieceTheme: '/static/img/chesspieces/wikipedia/{piece}.png', // Optional: your theme path
+        moveSpeed: 400, // Enable smooth animations
     });
 
     // Bind click events to squares
@@ -76,15 +84,20 @@ async function playAIMove() {
                 console.error("Invalid AI move:", aiMove);
             } else {
                 console.log("Move applied:", moveResult);
-                board1.position(game.fen());
+                board1.position(game.fen()); // Animate to new position
                 console.log("Board updated after AI move.");
+
+                // Record the new position in the history
+                moveHistory = moveHistory.slice(0, currentMoveIndex + 1); // Trim forward history
+                moveHistory.push(game.fen());
+                currentMoveIndex++;
+                updateNavigationButtons(); // Update button states
             }
         }, 1000); // Delay of 1000ms (1 second)
     } else {
         console.error("No AI move returned.");
     }
 }
-
 
 function onSquareClick(square) {
     if (moveValidationEnabled) {
@@ -102,9 +115,15 @@ function onSquareClick(square) {
                 return;
             }
 
-            board1.position(game.fen());
+            board1.position(game.fen()); // Animate to new position
             selectedSquare = null;
             removeHighlights();
+
+            // Record the new position in the history
+            moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
+            moveHistory.push(game.fen());
+            currentMoveIndex++;
+            updateNavigationButtons(); // Update button states
 
             // Trigger AI move after player's move
             playAIMove();
@@ -162,6 +181,10 @@ $('#reset').click(() => {
     selectedSquare = null;
     removeHighlights();
     moveValidationEnabled = false;
+
+    // Reset move history
+    moveHistory = [game.fen()];
+    currentMoveIndex = 0;
 });
 
 // Main game flow
@@ -209,6 +232,7 @@ function setupDifficultyButtons() {
     });
 }
 
+// Call updateNavigationButtons when the game starts
 function startGame(difficulty) {
     selectedDifficulty = difficulty; // Store the selected difficulty
     moveValidationEnabled = true;
@@ -220,10 +244,21 @@ function startGame(difficulty) {
             <button id="resignButton" class="btn btn-danger btn-lg mt-3 fs-5">
                 <i class="bi bi-flag-fill"></i> Resign
             </button>
+
+            <button id="prevMove" class="btn btn-primary fs-5 ms-5 mt-3">
+            <i class="bi bi-arrow-left-square-fill me-1"></i> Previous
+            </button>
+
+            <button id="nextMove" class="btn btn-primary fs-5 ms-2 mt-3">
+            Next <i class="bi bi-arrow-right-square-fill ms-1"></i>
+            </button>
         `);
 
         // Fade in the Resign button
         $('#resignButton').fadeIn();
+
+        // Initialize button states
+        updateNavigationButtons();
 
         // Add click event to redirect to the stats page
         $('#resignButton').click(() => {
@@ -237,6 +272,60 @@ function startGame(difficulty) {
         }
     });
 }
+
+// Helper function to update the state of the Previous and Next buttons
+function updateNavigationButtons() {
+    if (currentMoveIndex <= 0) {
+        $('#prevMove').prop('disabled', true).removeClass('btn-primary').addClass('btn-secondary'); // Disable and gray out Previous button
+    } else {
+        $('#prevMove').prop('disabled', false).removeClass('btn-secondary').addClass('btn-primary'); // Enable and restore Previous button
+    }
+
+    if (currentMoveIndex >= moveHistory.length - 1) {
+        $('#nextMove').prop('disabled', true).removeClass('btn-primary').addClass('btn-secondary'); // Disable and gray out Next button
+    } else {
+        $('#nextMove').prop('disabled', false).removeClass('btn-secondary').addClass('btn-primary'); // Enable and restore Next button
+    }
+}
+
+// Update the button states after every move
+function updateMoveHistory(fen) {
+    moveHistory = moveHistory.slice(0, currentMoveIndex + 1); // Trim forward history
+    moveHistory.push(fen); // Add the new FEN
+    currentMoveIndex = moveHistory.length - 1; // Update the current index
+    updateNavigationButtons(); // Update button states
+}
+
+// Modify the Previous button click handler
+$(document).on('click', '#prevMove', () => {
+    if (currentMoveIndex > 0) {
+        currentMoveIndex--;
+        const fen = moveHistory[currentMoveIndex];
+        board1.position(fen); // Animate back
+        console.log(`Moved back to index ${currentMoveIndex}`);
+        updateNavigationButtons(); // Update button states
+    }
+});
+
+// Modify the Next button click handler
+$(document).on('click', '#nextMove', () => {
+    if (currentMoveIndex < moveHistory.length - 1) {
+        currentMoveIndex++;
+        const fen = moveHistory[currentMoveIndex];
+        board1.position(fen); // Animate forward
+        console.log(`Moved forward to index ${currentMoveIndex}`);
+        updateNavigationButtons(); // Update button states
+    }
+});
+
+// Map left and right arrow keys to Previous and Next actions
+$(document).keydown((e) => {
+    if (e.key === 'ArrowLeft') {
+        $('#prevMove').click(); // Trigger Previous button click
+    } else if (e.key === 'ArrowRight') {
+        $('#nextMove').click(); // Trigger Next button click
+    }
+});
 
 // Detect clicks outside the board
 $(document).on('click', function (e) {
