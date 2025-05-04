@@ -1,7 +1,7 @@
 body {
     font-family: Arial, sans-serif;
     text-align: center;
-    background-color: grey;
+    background-color: #1f1f1f;
     padding-top:5%;
     padding-bottom: 5%;
 }
@@ -24,8 +24,8 @@ button {
     padding: 1em 2em;
     font-size: 1em;
     cursor: pointer;
-    color: white;
-    background-color: black;
+    color: #000000;
+    background-color: #d4af37;
     border: none;
 }
 
@@ -91,11 +91,11 @@ button:hover {
 
 /* Change the colors of the chessboard squares */
 .square-55d63.white-1e1d7 {
-    background-color: #EEEED2; /* Light beige */
+    background-color: #f0d9b5; /* Light beige */
   }
   
   .square-55d63.black-3c85d {
-    background-color: #769656; /* Saddle brown */
+    background-color: #b58863; /* Saddle brown */
   }
 
 h1 {
