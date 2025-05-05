@@ -236,6 +236,22 @@ function startGame(difficulty) {
     });
 }
 
+async function saveGame(pgn, white, black, result) {
+    const response = await fetch('/save_game', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            pgn: pgn,
+            white: white,
+            black: black,
+            result: result
+        })
+    });
+    return await response.json();
+}
+
 // Detect clicks outside the board
 $(document).on('click', function (e) {
     const isInsideBoard = $(e.target).closest('#board1').length > 0;
