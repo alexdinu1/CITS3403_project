@@ -2,10 +2,13 @@ import os
 import platform
 import chess
 import chess.engine
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+import json
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 from datetime import datetime
 from flask_migrate import Migrate
+from models import db, User, Game, Move, PlayerStats, Friendship, GameAnalysis
 
 # May need to delete this
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -20,43 +23,10 @@ db_path = instance_path / 'app.db'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+
+db.init_app(app)
+
 migrate = Migrate(app, db)
-
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
-    email = db.Column(db.String(100), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_login = db.Column(db.DateTime)
-    
-    # Relationship to stats
-    stats = db.relationship('PlayerStats', backref='user', uselist=False)
-
-class Game(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    pgn = db.Column(db.Text, nullable=False)
-    white_player = db.Column(db.String(50))
-    black_player = db.Column(db.String(50))
-    result = db.Column(db.String(10))
-    date_played = db.Column(db.DateTime, default=datetime.now)
-    moves = db.relationship('Move', backref='game', lazy=True)
-
-class PlayerStats(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    wins = db.Column(db.Integer, default=0)
-    losses = db.Column(db.Integer, default=0)
-    draws = db.Column(db.Integer, default=0)
-    rating = db.Column(db.Integer, default=1000)
-
-class Move(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    game_id = db.Column(db.Integer, db.ForeignKey('game.id'))
-    move_number = db.Column(db.Integer)
-    move_text = db.Column(db.String(10))
-    fen = db.Column(db.String(100))
 
 # Determine the correct Stockfish binary based on the OS
 if platform.system() == "Darwin":  # macOS
@@ -71,7 +41,8 @@ else:
 # Initialize the database
 @app.cli.command('init-db')
 def init_db():
-    db.create_all()
+    with app.app_context():
+        db.create_all()
     print('Initialized the database.')
 
 @app.route('/')
@@ -90,6 +61,10 @@ def info():
 def stats():
     return render_template('stats.html')
 
+@app.route('/friends')
+def friends():
+    return render_template('friends.html')
+
 # Redirects for .html files
 @app.route('/index.html')
 def index_html_redirect():
@@ -106,6 +81,10 @@ def info_html_redirect():
 @app.route('/stats.html')
 def stats_html_redirect():
     return redirect(url_for('stats'))
+
+@app.route('/friends.html')
+def friends_html_redirect():
+    return redirect(url_for('friends'))
 
 @app.route('/get_ai_move', methods=['POST'])
 def get_ai_move():
@@ -186,7 +165,7 @@ def update_stats(white, black, result):
     db.session.commit()
 
 @app.route('/player_stats/<player_name>')
-def get_player_stats(player_name):
+def get_player_stats_by_name(player_name):
     stats = PlayerStats.query.filter_by(player_name=player_name).first()
     if stats:
         return jsonify({
@@ -254,13 +233,22 @@ def register():
             username=data['username'],
             email=data['email'],
             password_hash=generate_password_hash(data['password']),
-            last_login=datetime.utcnow()
+            last_login=datetime.now(),
+            is_active=True
         )
         db.session.add(user)
         db.session.commit()
         
         # Create default stats
-        stats = PlayerStats(user_id=user.id)
+        stats = PlayerStats(
+            user_id=user.id,
+            wins=0,
+            losses=0,
+            draws=0,
+            rating=1000,
+            highest_rating=1000,
+            last_game_id=None
+        )
         db.session.add(stats)
         db.session.commit()
         
@@ -273,3 +261,286 @@ def register():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+    
+# Add these new routes
+
+@app.route('/api/player_stats/<int:user_id>')
+def get_player_stats_api(user_id):
+    stats = PlayerStats.query.filter_by(user_id=user_id).first_or_404()
+    return jsonify({
+        'wins': stats.wins,
+        'losses': stats.losses,
+        'draws': stats.draws,
+        'rating': stats.rating,
+        'best_move': stats.best_move,
+        'best_move_score': stats.best_move_score,
+        'worst_move': stats.worst_move,
+        'worst_move_score': stats.worst_move_score,
+        'average_score': stats.average_score,
+        'last_game_id': stats.last_game_id
+    })
+
+@app.route('/api/game_analysis/<int:game_id>')
+def get_game_analysis(game_id):
+    analysis = GameAnalysis.query.filter_by(game_id=game_id).order_by(GameAnalysis.move_number).all()
+    return jsonify([{
+        'move_number': a.move_number,
+        'score': a.score,
+        'comment': a.comment
+    } for a in analysis])
+
+@app.route('/api/friends/<int:user_id>')
+def get_friends(user_id):
+    friends = Friendship.query.filter(
+        (Friendship.user_id == user_id) | (Friendship.friend_id == user_id),
+        Friendship.status == 'accepted'
+    ).all()
+    
+    friend_ids = []
+    for f in friends:
+        if f.user_id == user_id:
+            friend_ids.append(f.friend_id)
+        else:
+            friend_ids.append(f.user_id)
+    
+    friends_data = User.query.filter(User.id.in_(friend_ids)).all()
+    return jsonify([{
+        'id': f.id,
+        'username': f.username,
+        'rating': f.stats.rating if f.stats else 1000,
+        'last_active': f.last_login.isoformat() if f.last_login else None
+    } for f in friends_data])
+
+@app.route('/api/friend_requests/<int:user_id>')
+def get_friend_requests(user_id):
+    requests = Friendship.query.filter_by(
+        friend_id=user_id,
+        status='pending'
+    ).all()
+    
+    requesters = User.query.filter(User.id.in_([r.user_id for r in requests])).all()
+    return jsonify([{
+        'id': r.id,
+        'username': u.username,
+        'request_date': r.created_at.isoformat(),
+        'rating': u.stats.rating if u.stats else 1000
+    } for r, u in zip(requests, requesters)])
+
+@app.route('/api/friend_action', methods=['POST'])
+def handle_friend_action():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+        
+    action = data.get('action')
+    
+    if action == 'add':
+        try:
+            user_id = data.get('user_id')
+            friend_id = data.get('friend_id')
+            
+            if not user_id or not friend_id:
+                return jsonify({'error': 'Missing user_id or friend_id'}), 400
+                
+            # Check if friendship already exists
+            existing = Friendship.query.filter(
+                ((Friendship.user_id == user_id) & (Friendship.friend_id == friend_id)) |
+                ((Friendship.user_id == friend_id) & (Friendship.friend_id == user_id))
+            ).first()
+            
+            if existing:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Friendship already exists or pending'
+                }), 400
+                
+            # Create new friendship request
+            friendship = Friendship(
+                user_id=user_id,
+                friend_id=friend_id,
+                status='pending',
+                created_at=datetime.utcnow()
+            )
+            db.session.add(friendship)
+            db.session.commit()
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'Friend request sent'
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+    
+    # Existing actions (accept/reject/remove)
+    friendship_id = data.get('friendship_id')
+    if not friendship_id:
+        return jsonify({'error': 'Missing friendship_id'}), 400
+        
+    friendship = Friendship.query.get(friendship_id)
+    if not friendship:
+        return jsonify({'error': 'Friendship not found'}), 404
+    
+    if action == 'accept':
+        friendship.status = 'accepted'
+    elif action == 'reject':
+        friendship.status = 'rejected'
+    elif action == 'remove':
+        db.session.delete(friendship)
+    else:
+        return jsonify({'error': 'Invalid action'}), 400
+    
+    db.session.commit()
+    return jsonify({'status': 'success'})
+
+@app.route('/api/player_stats/<int:user_id>')
+def get_player_stats_by_id(user_id):
+    try:
+        # Get basic player stats
+        stats = PlayerStats.query.filter_by(user_id=user_id).first_or_404()
+        
+        # Calculate additional statistics
+        avg_score = db.session.query(
+            func.avg(GameAnalysis.score)
+            .filter(GameAnalysis.game.has(user_id=user_id))
+            .scalar() or 0
+        )
+        
+        # Get the last game's analysis for best/worst moves
+        last_game_analysis = GameAnalysis.query.filter_by(
+            game_id=stats.last_game_id).order_by(GameAnalysis.move_number).all()
+        
+        best_move = max(last_game_analysis, key=lambda x: x.score) if last_game_analysis else None
+        worst_move = min(last_game_analysis, key=lambda x: x.score) if last_game_analysis else None
+        
+        return jsonify({
+            'wins': stats.wins,
+            'losses': stats.losses,
+            'draws': stats.draws,
+            'rating': stats.rating,
+            'average_score': float(avg_score),
+            'highest_average': 7,  # Need to implement proper calculation
+            'lowest_average': 4,   # Need to implement proper calculation
+            'last_game_id': stats.last_game_id,
+            'best_move': best_move.move_number if best_move else None,
+            'best_move_score': best_move.score if best_move else None,
+            'worst_move': worst_move.move_number if worst_move else None,
+            'worst_move_score': worst_move.score if worst_move else None
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/search_players')
+def search_players():
+    query = request.args.get('q', '').strip()
+    exclude_id = request.args.get('exclude', type=int)
+    
+    if not query:
+        return jsonify([])
+    
+    # Search by username (case insensitive)
+    users = User.query.filter(
+        User.username.ilike(f'%{query}%'),
+        User.id != exclude_id
+    ).limit(20).all()
+    
+    results = []
+    for user in users:
+        stats = PlayerStats.query.filter_by(user_id=user.id).first()
+        results.append({
+            'id': user.id,
+            'username': user.username,
+            'rating': stats.rating if stats else 1000,
+            'wins': stats.wins if stats else 0,
+            'losses': stats.losses if stats else 0,
+            'draws': stats.draws if stats else 0,
+            'last_active': user.last_login.isoformat() if user.last_login else None
+        })
+    
+    return jsonify(results)
+
+@app.route('/api/suggestions/<int:user_id>')
+def get_suggestions(user_id):
+    # Get users who are not friends and not already requested
+    # Example implementation:
+    friends = Friendship.query.filter(
+        (Friendship.user_id == user_id) | 
+        (Friendship.friend_id == user_id)
+    ).all()
+    
+    friend_ids = {user_id}
+    for f in friends:
+        if f.user_id == user_id:
+            friend_ids.add(f.friend_id)
+        else:
+            friend_ids.add(f.user_id)
+    
+    # Get some random users who aren't friends
+    suggestions = User.query.filter(
+        User.id != user_id,
+        ~User.id.in_(friend_ids)
+    ).order_by(func.random()).limit(5).all()
+    
+    return jsonify([{
+        'id': u.id,
+        'username': u.username,
+        'rating': u.stats.rating if u.stats else 1000,
+        'wins': u.stats.wins if u.stats else 0,
+        'losses': u.stats.losses if u.stats else 0,
+        'draws': u.stats.draws if u.stats else 0,
+        'last_active': u.last_login.isoformat() if u.last_login else None
+    } for u in suggestions])
+
+@app.route('/api/get_friendship')
+def get_friendship():
+    user_id = request.args.get('user_id', type=int)
+    friend_id = request.args.get('friend_id', type=int)
+    
+    friendship = Friendship.query.filter(
+        ((Friendship.user_id == user_id) & (Friendship.friend_id == friend_id)) |
+        ((Friendship.user_id == friend_id) & (Friendship.friend_id == user_id))
+    ).first()
+    
+    if not friendship:
+        return jsonify({'error': 'Friendship not found'}), 404
+        
+    return jsonify({
+        'id': friendship.id,
+        'user_id': friendship.user_id,
+        'friend_id': friendship.friend_id,
+        'status': friendship.status
+    })
+
+@app.route('/friend_stats/<int:friend_id>')
+def friend_stats(friend_id):
+    return render_template('friend_stats.html', friend_id=friend_id)
+
+# Route to get current user from session
+@app.route('/api/current_user')
+def get_current_user():
+    # If you're using Flask sessions for authentication
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Not logged in"}), 401
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    return jsonify({
+        "user_id": user.id,
+        "username": user.username
+    })
+
+# Route to get user by ID (for testing when no session)
+@app.route('/api/current_user/<int:user_id>')
+def get_user_by_id(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    return jsonify({
+        "user_id": user.id,
+        "username": user.username
+    })
