@@ -174,10 +174,16 @@ function setupPlayButton() {
 
     $('#playGame').click(() => {
         $('.column button').fadeOut();
-        $('#board1').parent().animate({ marginTop: '-10vh' }, 500);
+        $('#board1').parent().animate({ marginTop: '0' }, 500);
         $('#playGame').fadeOut(() => {
             setupDifficultyButtons();
         });
+
+        // Hide sidebar and menu button when "Play Game" is clicked
+        const sidebar = document.getElementById("mySidebar");
+        const menuButton = document.querySelector(".openbtn");
+        sidebar.style.display = "none";
+        menuButton.style.display = "none";
     });
 
     $('.column button').fadeIn();
@@ -203,6 +209,11 @@ function setupDifficultyButtons() {
             $('#board1').parent().animate({ marginTop: '0' }, 500, () => {
                 setupPlayButton();
             });
+        // Show sidebar and menu button when "Back" is clicked
+        const sidebar = document.getElementById("mySidebar");
+        const menuButton = document.querySelector(".openbtn");
+        sidebar.style.display = "block";
+        menuButton.style.display = "block";
         });
     });
 }
