@@ -77,6 +77,19 @@ async function playAIMove() {
                 console.log("Move applied:", moveResult);
                 board1.position(game.fen());
                 console.log("Board updated after AI move.");
+
+                // Check if game is over after AI move
+                if (game.isGameOver()) {
+                    const result = getGameResult();
+                    saveGame(
+                        game.pgn(),
+                        boardOrientation === 'white' ? "Player" : "AI",
+                        boardOrientation === 'white' ? "AI" : "Player",
+                        result
+                    ).then(() => {
+                        showGameResult(result);
+                    });
+                }
             }
         }, 1000); // Delay of 1000ms (1 second)
     } else {
@@ -84,8 +97,30 @@ async function playAIMove() {
     }
 }
 
+function getGameResult() {
+    if (game.isCheckmate()) {
+        return game.turn() === 'w' ? '0-1' : '1-0';
+    }
+    if (game.isDraw()) {
+        return '1/2-1/2';
+    }
+    return '*';
+}
 
-function onSquareClick(square) {
+function showGameResult(result) {
+    let message = "";
+    switch(result) {
+        case '1-0': message = "White wins!"; break;
+        case '0-1': message = "Black wins!"; break;
+        case '1/2-1/2': message = "Draw!"; break;
+        default: message = "Game ended"; break;
+    }
+    
+    alert(message);
+}
+
+
+function onSquareClick(square) {    
     if (moveValidationEnabled) {
         const moves = game.moves({ square, verbose: true });
 
@@ -105,8 +140,20 @@ function onSquareClick(square) {
             selectedSquare = null;
             removeHighlights();
 
-            // Trigger AI move after player's move
-            playAIMove();
+            // Check if player's move ended the game
+            if (game.isGameOver()) {
+                const result = getGameResult();
+                saveGame(
+                    game.pgn(),
+                    boardOrientation === 'white' ? "Player" : "AI",
+                    boardOrientation === 'white' ? "AI" : "Player",
+                    result
+                ).then(() => {
+                    showGameResult(result);
+                });
+            } else {
+                playAIMove(); // Trigger AI move after player's move
+            }
         }
     } else {
         if (!selectedSquare) {
@@ -224,8 +271,19 @@ function startGame(difficulty) {
         $('#resignButton').fadeIn();
 
         // Add click event to redirect to the stats page
-        $('#resignButton').click(() => {
-            window.location.href = '/stats'; // Redirect to the stats page
+        $('#resignButton').click(async () => {
+            const result = boardOrientation === 'white' ? '0-1' : '1-0';
+            const confirmation = confirm(`Are you sure you want to resign? This will count as a ${result === '1-0' ? 'win' : 'loss'} for the AI.`);
+            
+            if (confirmation) {
+                await saveGame(
+                    game.pgn(),
+                    boardOrientation === 'white' ? "Player" : "AI",
+                    boardOrientation === 'white' ? "AI" : "Player",
+                    result
+                );
+                window.location.href = '/stats'; // Redirect to the stats page
+            }
         });
 
         // If playing as black, let Stockfish (white) make the first move
@@ -237,19 +295,35 @@ function startGame(difficulty) {
 }
 
 async function saveGame(pgn, white, black, result) {
-    const response = await fetch('/save_game', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            pgn: pgn,
-            white: white,
-            black: black,
-            result: result
-        })
-    });
-    return await response.json();
+    try {
+        console.log("Attempting to save game:", { pgn, white, black, result });
+        
+        const response = await fetch('/save_game', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                pgn: pgn,
+                white: white || "Player",  // Default values
+                black: black || "AI",
+                result: result || "*"      // '*' means unfinished
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || "Failed to save game");
+        }
+
+        console.log("Game saved successfully:", data);
+        return data;
+    } catch (error) {
+        console.error("Error saving game:", error);
+        // Consider showing an error message to the user
+        return { error: error.message };
+    }
 }
 
 // Detect clicks outside the board
