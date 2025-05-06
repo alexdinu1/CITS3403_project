@@ -5,12 +5,34 @@ import chess.engine
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from flask_migrate import Migrate
+
+# May need to delete this
+from werkzeug.security import generate_password_hash, check_password_hash
+from pathlib import Path
 
 app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(app.instance_path, 'chess.db')
+basedir = Path(__file__).parent
+instance_path = Path(app.instance_path)
+instance_path.mkdir(exist_ok=True)
+db_path = instance_path / 'app.db'
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_login = db.Column(db.DateTime)
+    
+    # Relationship to stats
+    stats = db.relationship('PlayerStats', backref='user', uselist=False)
 
 class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -23,7 +45,7 @@ class Game(db.Model):
 
 class PlayerStats(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    player_name = db.Column(db.String(50), unique=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     wins = db.Column(db.Integer, default=0)
     losses = db.Column(db.Integer, default=0)
     draws = db.Column(db.Integer, default=0)
@@ -46,6 +68,7 @@ elif platform.system() == "Linux":  # Linux
 else:
     raise OSError("Unsupported operating system")
 
+# Initialize the database
 @app.cli.command('init-db')
 def init_db():
     db.create_all()
@@ -125,7 +148,8 @@ def save_game():
         pgn=data['pgn'],
         white_player=data['white'],
         black_player=data['black'],
-        result=data['result']
+        result=data['result'],
+        user_id=data['user_id']
     )
     
     db.session.add(game)
@@ -172,3 +196,80 @@ def get_player_stats(player_name):
             "rating": stats.rating
         })
     return jsonify({"error": "Player not found"}), 404
+
+@app.route('/login', methods=['POST'])
+def login():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data received"}), 400
+            
+        user = User.query.filter((User.username == data.get('username')) | 
+                               (User.email == data.get('username'))).first()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+            
+        if not user or not check_password_hash(user.password_hash, data.get('password', '')):
+            return jsonify({"error": "Invalid username or password"}), 401
+            
+        user.last_login = datetime.utcnow()
+        db.session.commit()
+        
+        # Create stats if missing
+        if not user.stats:
+            stats = PlayerStats(user_id=user.id)
+            db.session.add(stats)
+            db.session.commit()
+        
+        return jsonify({
+            "status": "success",
+            "user_id": user.id,
+            "username": user.username
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/register', methods=['POST'])
+def register():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data received"}), 400
+            
+        # Validate required fields
+        required = ['username', 'email', 'password']
+        if not all(field in data for field in required):
+            return jsonify({"error": "Missing required fields"}), 400
+            
+        # Check for existing user
+        if User.query.filter_by(username=data['username']).first():
+            return jsonify({"error": "Username already exists"}), 400
+        if User.query.filter_by(email=data['email']).first():
+            return jsonify({"error": "Email already exists"}), 400
+            
+        user = User(
+            username=data['username'],
+            email=data['email'],
+            password_hash=generate_password_hash(data['password']),
+            last_login=datetime.utcnow()
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        # Create default stats
+        stats = PlayerStats(user_id=user.id)
+        db.session.add(stats)
+        db.session.commit()
+        
+        return jsonify({
+            "status": "success",
+            "user_id": user.id,
+            "username": user.username
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500

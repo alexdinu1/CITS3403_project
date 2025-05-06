@@ -19,16 +19,124 @@
       <br>
       <h2>Log in / Sign up</h2>
       <br>
-      <form onsubmit="redirectToInfo(event)" class="mx-auto" style="max-width: 300px;">
-        <input type="text" class="form-control mb-5" placeholder="Username or email" required />
-        <input type="password" class="form-control mb-5" placeholder="Password" required />
-        <button type="submit" class="btn btn-primary w-100">Log In / Sign Up</button>
+
+      <!-- Login Form -->
+      <form id="loginForm" class="mx-auto" style="max-width: 300px;">
+        <input type="text" id="loginUsername" class="form-control mb-3" placeholder="Username or email" required />
+        <input type="password" id="loginPassword" class="form-control mb-3" placeholder="Password" required />
+        <button type="submit" class="btn btn-primary w-100 mb-4">Log In</button>
       </form>
+  
+      <!-- Signup Form -->
+      <div id="signupSection" style="display: none;">
+        <form id="signupForm" class="mx-auto" style="max-width: 300px;">
+          <input type="text" id="signupUsername" class="form-control mb-3" placeholder="Username" required />
+          <input type="email" id="signupEmail" class="form-control mb-3" placeholder="Email" required />
+          <input type="password" id="signupPassword" class="form-control mb-3" placeholder="Password" required />
+          <input type="password" id="signupConfirm" class="form-control mb-3" placeholder="Confirm Password" required />
+          <button type="submit" class="btn btn-success w-100 mb-2">Sign Up</button>
+          <button type="button" class="btn btn-link" onclick="toggleForms()">Back to Login</button>
+        </form>
+      </div>
+      <button id="showSignup" class="btn btn-link" onclick="toggleForms()">Create an account</button>
     </div>
+
     <script>
-      function redirectToInfo(event) {
-        event.preventDefault();
-        window.location.href = "{{ url_for('info') }}";
+      function toggleForms() {
+        const loginForm = document.getElementById('loginForm');
+        const signupSection = document.getElementById('signupSection');
+        const showSignup = document.getElementById('showSignup');
+    
+        if (signupSection.style.display === 'none') {
+          loginForm.style.display = 'none';
+          signupSection.style.display = 'block';
+          showSignup.style.display = 'none';
+        } else {
+          loginForm.style.display = 'block';
+          signupSection.style.display = 'none';
+          showSignup.style.display = 'block';
+        }
+      }
+    </script>
+
+    <script>
+      // For login
+      async function handleLogin() {
+        try {
+          const response = await fetch('/login', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                username: document.getElementById('loginUsername').value,
+                password: document.getElementById('loginPassword').value
+            })
+          });
+        
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Login failed");
+        }
+        handleAuthSuccess(data);
+      } catch (error) {
+        console.error("Login error:", error);
+        alert(error.message);
+      }
+    }
+
+      async function handleRegister() {
+        if (document.getElementById('signupPassword').value !== 
+          document.getElementById('signupConfirm').value) {
+            alert("Passwords don't match!");
+            return;
+          }
+
+        try {
+          const response = await fetch('/register', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                username: document.getElementById('signupUsername').value,
+                email: document.getElementById('signupEmail').value,
+                password: document.getElementById('signupPassword').value
+            })
+          });
+        
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Registration failed");
+        }
+        handleAuthSuccess(data);
+    } catch (error) {
+        console.error("Registration error:", error);
+        alert(error.message);
+      }
+    }
+    </script>
+
+    <script>
+      // Add event listeners after DOM loads
+      document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+          e.preventDefault();
+          handleLogin();
+        });
+    
+      document.getElementById('signupForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        handleRegister();
+      });
+    });
+
+      // Handle successful authentication
+      function handleAuthSuccess(data) {
+        localStorage.setItem('chess_user', JSON.stringify(data));
+        window.location.href = '/info';  // Redirect after login/register
       }
     </script>
   </body>
