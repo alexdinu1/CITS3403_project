@@ -377,6 +377,7 @@ $(document).on('click', '#prevMove', () => {
     if (currentMoveIndex > 0) {
         currentMoveIndex--;
         const fen = moveHistory[currentMoveIndex];
+        game.load(fen); // Synchronize the game state with the FEN
         board1.position(fen); // Animate back
         console.log(`Moved back to index ${currentMoveIndex}`);
         updateNavigationButtons(); // Update button states
@@ -388,6 +389,7 @@ $(document).on('click', '#nextMove', () => {
     if (currentMoveIndex < moveHistory.length - 1) {
         currentMoveIndex++;
         const fen = moveHistory[currentMoveIndex];
+        game.load(fen);
         board1.position(fen); // Animate forward
         console.log(`Moved forward to index ${currentMoveIndex}`);
         updateNavigationButtons(); // Update button states
