@@ -89,30 +89,138 @@ def friends_html_redirect():
 @app.route('/get_ai_move', methods=['POST'])
 def get_ai_move():
     data = request.json
-    fen = data.get('fen')  # Get the current board position in FEN format
-    difficulty = data.get('difficulty', 'medium')  # Default to 'medium' if not provided
+    fen = data.get('fen')
+    difficulty = data.get('difficulty', 'medium')
 
     if not fen:
         return jsonify({'error': 'FEN not provided'}), 400
 
-    # Map difficulty to Stockfish parameters
     difficulty_settings = {
         'easy': {'skill_level': 1, 'depth': 10},
         'medium': {'skill_level': 10, 'depth': 12},
-        'hard': {'skill_level': 20, 'depth': None}  # Let it use full strength without artificial limits
+        'hard': {'skill_level': 20, 'depth': None}
     }
     settings = difficulty_settings.get(difficulty, difficulty_settings['medium'])
 
     try:
-        # Initialize Stockfish engine
         with chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH) as engine:
             board = chess.Board(fen)
 
-            # Set Stockfish skill level and depth
             engine.configure({'Skill Level': settings['skill_level']})
             result = engine.play(board, chess.engine.Limit(depth=settings['depth']))
 
-            return jsonify({'move': result.move.uci()})  # Return the move in UCI format
+            info = engine.analyse(board, chess.engine.Limit(depth=settings['depth']))
+            evaluation = None
+
+            # Check if the score is available
+            if 'score' in info:
+                score = info['score'].white()
+                if isinstance(score, chess.engine.Mate):
+                    # Mate score: positive for AI winning, negative for opponent winning
+                    evaluation = 10000 if score > 0 else -10000
+                elif isinstance(score, chess.engine.Cp):
+                    # Centipawn score
+                    evaluation = score.score()
+
+            return jsonify({
+                'move': result.move.uci(),
+                'evaluation': evaluation
+            })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+@app.route('/get_evaluation', methods=['POST'])
+def get_evaluation():
+    data = request.json
+    fen = data.get('fen')
+    difficulty = data.get('difficulty', 'medium')
+
+    if not fen:
+        return jsonify({'error': 'FEN not provided'}), 400
+
+    difficulty_settings = {
+        'easy': {'skill_level': 1, 'depth': 10},
+        'medium': {'skill_level': 10, 'depth': 12},
+        'hard': {'skill_level': 20, 'depth': None}
+    }
+    settings = difficulty_settings.get(difficulty, difficulty_settings['medium'])
+
+    try:
+        with chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH) as engine:
+            board = chess.Board(fen)
+            engine.configure({'Skill Level': settings['skill_level']})
+
+            info = engine.analyse(board, chess.engine.Limit(depth=settings['depth']))
+            evaluation = None
+
+            if 'score' in info:
+                score = info['score'].white()
+                if isinstance(score, chess.engine.Mate):
+                    # Positive = white is mating, negative = black is mating
+                    evaluation = 10000 if score.mate() > 0 else -10000
+                elif isinstance(score, chess.engine.Cp):
+                    evaluation = score.score()
+
+            return jsonify({'evaluation': evaluation})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/evaluate_move', methods=['POST'])
+def evaluate_move():
+    data = request.json
+    fen_before = data.get('fen_before')
+    fen_after = data.get('fen_after')
+
+    if not fen_before or not fen_after:
+        return jsonify({'error': 'Missing FEN(s)'}), 400
+
+    try:
+        with chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH) as engine:
+            board_before = chess.Board(fen_before)
+            board_after = chess.Board(fen_after)
+
+            # Evaluate the position before the move
+            info_before = engine.analyse(board_before, chess.engine.Limit(depth=15))
+            eval_before = info_before['score'].white().score()
+
+            # Evaluate the position after the move
+            info_after = engine.analyse(board_after, chess.engine.Limit(depth=15))
+            eval_after = info_after['score'].white().score()
+
+            # Calculate Centipawn Loss (CPL)
+            cpl = abs(eval_before - eval_after)
+
+            # Map CPL to a score
+            if cpl == 0:
+                score = 10
+                feedback = "Perfect move"
+            elif cpl <= 20:
+                score = 9
+                feedback = "Excellent move"
+            elif cpl <= 50:
+                score = 7
+                feedback = "Good move"
+            elif cpl <= 100:
+                score = 5
+                feedback = "Average move"
+            elif cpl <= 200:
+                score = 3
+                feedback = "Inaccuracy"
+            elif cpl <= 500:
+                score = 1
+                feedback = "Mistake"
+            else:
+                score = 0
+                feedback = "Blunder"
+
+            return jsonify({
+                'cpl': cpl,
+                'score': score,
+                'feedback': feedback
+            })
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
