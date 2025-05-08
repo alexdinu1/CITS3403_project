@@ -340,7 +340,7 @@ def register():
         user = User(
             username=data['username'],
             email=data['email'],
-            password_hash=generate_password_hash(data['password']),
+            password_hash=generate_password_hash(data['password'], method='pbkdf2:sha256'),
             last_login=datetime.now(),
             is_active=True
         )

@@ -126,20 +126,6 @@ async function playAIMove() {
                 console.error("Invalid AI move:", aiMove);
             } else {
                 board1.position(game.fen());
-                console.log("Board updated after AI move.");
-
-                // Check if game is over after AI move
-                if (game.isGameOver()) {
-                    const result = getGameResult();
-                    saveGame(
-                        game.pgn(),
-                        boardOrientation === 'white' ? "Player" : "AI",
-                        boardOrientation === 'white' ? "AI" : "Player",
-                        result
-                    ).then(() => {
-                        showGameResult(result);
-                    });
-                }
 
                 moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
                 moveHistory.push(game.fen());
@@ -220,21 +206,6 @@ function onSquareClick(square) {
             selectedSquare = null;
             removeHighlights();
 
-            // Check if player's move ended the game
-            if (game.isGameOver()) {
-                const result = getGameResult();
-                saveGame(
-                    game.pgn(),
-                    boardOrientation === 'white' ? "Player" : "AI",
-                    boardOrientation === 'white' ? "AI" : "Player",
-                    result
-                ).then(() => {
-                    showGameResult(result);
-                });
-            } else {
-                playAIMove(); // Trigger AI move after player's move
-            }
-
             const fenAfter = game.fen(); // Save FEN after the move
 
             // Evaluate the player's move
@@ -246,6 +217,7 @@ function onSquareClick(square) {
             updateNavigationButtons();
 
             // Trigger AI move
+            playAIMove();
         }
     } else {
         if (!selectedSquare) {
