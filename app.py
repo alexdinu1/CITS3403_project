@@ -75,15 +75,15 @@ def get_ai_move():
             info = engine.analyse(board, chess.engine.Limit(depth=settings['depth']))
             evaluation = None
 
-            # Check if the score is available
-            if 'score' in info:
-                score = info['score'].white()
-                if isinstance(score, chess.engine.Mate):
-                    # Mate score: positive for AI winning, negative for opponent winning
-                    evaluation = 10000 if score > 0 else -10000
-                elif isinstance(score, chess.engine.Cp):
-                    # Centipawn score
-                    evaluation = score.score()
+            score_obj = info['score'].white()
+
+            if isinstance(score_obj, chess.engine.Cp):
+                evaluation = score_obj.score()
+            elif isinstance(score_obj, chess.engine.Mate):
+                mate_val = score_obj.mate()
+                evaluation = 100000 if mate_val > 0 else -100000
+            else:
+                evaluation = 0
 
             return jsonify({
                 'move': result.move.uci(),
@@ -92,6 +92,7 @@ def get_ai_move():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
     
 @app.route('/get_evaluation', methods=['POST'])
 def get_evaluation():
@@ -144,43 +145,69 @@ def evaluate_move():
             board_before = chess.Board(fen_before)
             board_after = chess.Board(fen_after)
 
-            # Evaluate the position before the move
             info_before = engine.analyse(board_before, chess.engine.Limit(depth=15))
-            eval_before = info_before['score'].white().score()
-
-            # Evaluate the position after the move
             info_after = engine.analyse(board_after, chess.engine.Limit(depth=15))
-            eval_after = info_after['score'].white().score()
 
-            # Calculate Centipawn Loss (CPL)
+            # 🟢 Correct: get the Score object by calling .white()
+            score_before = info_before['score'].white()
+            score_after = info_after['score'].white()
+
+            def score_to_cp(score_obj):
+                if isinstance(score_obj, chess.engine.Cp):
+                    return score_obj.score()
+                elif isinstance(score_obj, chess.engine.Mate):
+                    mate_val = score_obj.mate()
+                    return 100000 if mate_val > 0 else -100000
+                else:
+                    return 0
+
+            eval_before = score_to_cp(score_before)
+            eval_after = score_to_cp(score_after)
+
             cpl = abs(eval_before - eval_after)
 
-            # Map CPL to a score
-            if cpl == 0:
-                score = 10
-                feedback = "Perfect move"
-            elif cpl <= 20:
-                score = 9
-                feedback = "Excellent move"
-            elif cpl <= 50:
-                score = 7
-                feedback = "Good move"
-            elif cpl <= 100:
-                score = 5
-                feedback = "Average move"
-            elif cpl <= 200:
-                score = 3
-                feedback = "Inaccuracy"
-            elif cpl <= 500:
-                score = 1
-                feedback = "Mistake"
+            if score_after.is_mate():
+                mate_val = score_after.mate()
+                if mate_val > 0:
+                    feedback = f"You're delivering mate in {mate_val}"
+                    score_value = 10
+                else:
+                    feedback = f"Opponent has mate in {abs(mate_val)}"
+                    score_value = 0
+            elif score_before.is_mate():
+                mate_val = score_before.mate()
+                if mate_val > 0:
+                    feedback = f"You were delivering mate in {mate_val}, don't miss it!"
+                    score_value = 5
+                else:
+                    feedback = f"Opponent was mating in {abs(mate_val)}, stay alert!"
+                    score_value = 1
             else:
-                score = 0
-                feedback = "Blunder"
+                if cpl == 0:
+                    score_value = 10
+                    feedback = "Perfect move"
+                elif cpl <= 20:
+                    score_value = 9
+                    feedback = "Excellent move"
+                elif cpl <= 50:
+                    score_value = 7
+                    feedback = "Good move"
+                elif cpl <= 100:
+                    score_value = 5
+                    feedback = "Average move"
+                elif cpl <= 200:
+                    score_value = 3
+                    feedback = "Inaccuracy"
+                elif cpl <= 500:
+                    score_value = 1
+                    feedback = "Mistake"
+                else:
+                    score_value = 0
+                    feedback = "Blunder"
 
             return jsonify({
                 'cpl': cpl,
-                'score': score,
+                'score': score_value,
                 'feedback': feedback
             })
 
