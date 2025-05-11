@@ -132,6 +132,12 @@ async function playAIMove() {
                 currentMoveIndex++;
                 updateNavigationButtons();
 
+                // Check for checkmate
+                if (game.in_checkmate()) {
+                    setTimeout(() => {
+                        showCheckmateOptions(); // Show the checkmate options modal
+                    }, 500); // Delay to ensure the move is visually updated first
+                }
             }
         }, 1000);
     } else {
@@ -194,8 +200,15 @@ function onSquareClick(square) {
             currentMoveIndex++;
             updateNavigationButtons();
 
-            // Trigger AI move
-            playAIMove();
+            // Check for checkmate
+            if (game.in_checkmate()) {
+                setTimeout(() => {
+                    showCheckmateOptions(); // Show the checkmate options modal
+                }, 500); // Delay to ensure the move is visually updated first
+            } else {
+                // Trigger AI move
+                playAIMove();
+            }
         }
     } else {
         if (!selectedSquare) {
@@ -424,3 +437,52 @@ $(document).on('click', function (e) {
 // Initialize on page load
 initializeBoard('white');
 setupPlayButton();
+
+function showCheckmateOptions() {
+    // Determine the winner
+    const winner = game.turn() === 'w' ? 'Black' : 'White';
+
+    $('#resignButton').replaceWith(`
+        <button id="newGameButton" class="btn btn-success mt-3 fs-5">New Game</button>
+        <button id="viewStatsButton" class="btn btn-secondary mt-3 fs-5">View Stats</button>
+    `);
+
+    // Create a modal dialog for checkmate options
+    const modalHtml = `
+        <div id="checkmateModal" class="modal" tabindex="-1" role="dialog" style="display: block; background: rgba(0, 0, 0, 0.5);">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Checkmate! ${winner} wins!</h5>
+                    </div>
+                    <div class="modal-footer d-flex justify-content-center gap-2">
+                        <button id="reviewGameButton" class="btn btn-primary">Review Game</button>
+                        <button id="newGameButton" class="btn btn-success">New Game</button>
+                        <button id="viewStatsButton" class="btn btn-secondary">View Stats</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Append the modal to the body
+    $('body').append(modalHtml);
+
+    // Add event listeners for the buttons
+    $('#reviewGameButton').click(() => {
+        closeCheckmateModal(); // Close the modal
+        // Do nothing, just leave the board as it is
+    });
+
+    $('#newGameButton').click(() => {
+        location.reload(); // Refresh the page to start a new game
+    });
+
+    $('#viewStatsButton').click(() => {
+        window.location.href = '/stats'; // Redirect to stats page
+    });
+}
+
+function closeCheckmateModal() {
+    $('#checkmateModal').remove(); // Remove the modal from the DOM
+}
