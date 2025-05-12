@@ -126,20 +126,6 @@ async function playAIMove() {
                 console.error("Invalid AI move:", aiMove);
             } else {
                 board1.position(game.fen());
-                console.log("Board updated after AI move.");
-
-                // Check if game is over after AI move
-                if (game.isGameOver()) {
-                    const result = getGameResult();
-                    saveGame(
-                        game.pgn(),
-                        boardOrientation === 'white' ? "Player" : "AI",
-                        boardOrientation === 'white' ? "AI" : "Player",
-                        result
-                    ).then(() => {
-                        showGameResult(result);
-                    });
-                }
 
                 moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
                 moveHistory.push(game.fen());
@@ -197,7 +183,6 @@ async function evaluatePlayerMove(fenBefore, fenAfter) {
     }
 }
 
-// Modify onSquareClick to evaluate the player's move
 function onSquareClick(square) {
     if (moveValidationEnabled) {
         const moves = game.moves({ square, verbose: true });
@@ -208,7 +193,67 @@ function onSquareClick(square) {
             highlightSquares(square, moves.map(m => m.to));
         } else {
             const fenBefore = game.fen(); // Save FEN before the move
-            const move = game.move({ from: selectedSquare, to: square });
+            const pieceAtFrom = game.get(selectedSquare);
+            const isPromotionSquare = (square[1] === '8' || square[1] === '1');
+            const isPawnPromotion = pieceAtFrom && pieceAtFrom.type === 'p' && isPromotionSquare;
+
+            if (isPawnPromotion) {
+                // Determine the piece color based on the player's orientation
+                const pieceColor = boardOrientation === 'white' ? 'w' : 'b';
+
+                // Update the modal images dynamically
+                $('#promotionQueen').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}Q.png`);
+                $('#promotionRook').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}R.png`);
+                $('#promotionBishop').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}B.png`);
+                $('#promotionKnight').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}N.png`);
+ 
+
+                // Move execution happens INSIDE modal click handler
+                $('#promotionModal').modal('show');
+
+                $('.promotion-piece').off('click').on('click', function () {
+                    const promotionPiece = $(this).data('piece'); // q, r, b, n
+
+                    const move = game.move({
+                        from: selectedSquare,
+                        to: square,
+                        promotion: promotionPiece
+                    });
+
+                    if (move === null) {
+                        selectedSquare = null;
+                        removeHighlights();
+                        $('#promotionModal').modal('hide');
+                        return;
+                    }
+
+                    $('#moveText').html(`Moved from <b>${move.from}</b> to <b>${move.to}</b>`);
+                    board1.position(game.fen());
+                    selectedSquare = null;
+                    removeHighlights();
+
+                    const fenAfter = game.fen();
+                    evaluatePlayerMove(fenBefore, fenAfter);
+
+                    moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
+                    moveHistory.push(game.fen());
+                    currentMoveIndex++;
+                    updateNavigationButtons();
+
+                    playAIMove();
+
+                    $('#promotionModal').modal('hide');
+                });
+
+                return; // Important: stop here, wait for modal choice
+            }
+
+            // If no promotion, normal move execution
+            const move = game.move({
+                from: selectedSquare,
+                to: square
+            });
+
             if (move === null) {
                 selectedSquare = null;
                 removeHighlights();
@@ -220,24 +265,7 @@ function onSquareClick(square) {
             selectedSquare = null;
             removeHighlights();
 
-            // Check if player's move ended the game
-            if (game.isGameOver()) {
-                const result = getGameResult();
-                saveGame(
-                    game.pgn(),
-                    boardOrientation === 'white' ? "Player" : "AI",
-                    boardOrientation === 'white' ? "AI" : "Player",
-                    result
-                ).then(() => {
-                    showGameResult(result);
-                });
-            } else {
-                playAIMove(); // Trigger AI move after player's move
-            }
-
-            const fenAfter = game.fen(); // Save FEN after the move
-
-            // Evaluate the player's move
+            const fenAfter = game.fen();
             evaluatePlayerMove(fenBefore, fenAfter);
 
             moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
@@ -245,7 +273,7 @@ function onSquareClick(square) {
             currentMoveIndex++;
             updateNavigationButtons();
 
-            // Trigger AI move
+            playAIMove();
         }
     } else {
         if (!selectedSquare) {
