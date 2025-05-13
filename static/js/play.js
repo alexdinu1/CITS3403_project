@@ -354,8 +354,9 @@ function setupPlayButton() {
         // Hide sidebar and menu button when "Play Game" is clicked
         const sidebar = document.getElementById("mySidebar");
         const menuButton = document.querySelector(".openbtn");
-        sidebar.style.display = "none";
-        menuButton.style.display = "none";
+      
+        sidebar.classList.add("closed");
+        menuButton.classList.add("hidden");
     });
 
     $('.column button').fadeIn();
@@ -384,8 +385,9 @@ function setupDifficultyButtons() {
         // Show sidebar and menu button when "Back" is clicked
         const sidebar = document.getElementById("mySidebar");
         const menuButton = document.querySelector(".openbtn");
-        sidebar.style.display = "block";
-        menuButton.style.display = "block";
+
+        sidebar.classList.remove("closed");
+        menuButton.classList.remove("hidden");
         });
     });
 }

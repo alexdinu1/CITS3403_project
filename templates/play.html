@@ -36,8 +36,14 @@
       left: 0;
       background-color: #111;
       overflow-x: hidden;
-      transition: 0.3s;
-      padding-top: 60px;
+      padding-top: 70px;
+      z-index: 1000;
+      transition: transform 0.5s ease;  /* <<< ADD THIS */
+      transform: translateX(0);          /* visible position */
+    }
+
+    .sidebar.closed {
+      transform: translateX(-100%);      /* slide out to the left */
     }
 
     .sidebar button {
@@ -64,11 +70,18 @@
       padding: 10px 15px;
       border: none;
       z-index: 1001;
+      transition: transform 0.5s ease, opacity 0.5s ease;
+    }
+
+    .openbtn.hidden {
+      transform: translateX(-100%);
+      opacity: 0;
+      pointer-events: none;
     }
 
     .main-content {
-      margin-left: 260px;
       padding: 20px;
+      margin-left: 0; /* Ensure it doesn't get pushed by the sidebar */
     }
 
     #board1 {
@@ -79,7 +92,6 @@
 
     @media (max-width: 768px) {
       .main-content {
-        margin-left: 0;
         padding: 10px;
       }
 
@@ -90,14 +102,14 @@
       .sidebar {
         width: 100%;
         height: auto;
-        position: relative;
+        position: fixed; /* Keep it fixed for mobile as well */
         padding-top: 20px;
       }
 
       .openbtn {
-        position: relative;
-        top: 0;
-        left: 0;
+        position: fixed;
+        top: 10px;
+        left: 10px;
       }
     }
   </style>
@@ -131,11 +143,7 @@
 <script>
   function toggleSidebar() {
     const sidebar = document.getElementById("mySidebar");
-    if (sidebar.style.display === "none" || sidebar.style.display === "") {
-      sidebar.style.display = "block";
-    } else {
-      sidebar.style.display = "none";
-    }
+    sidebar.classList.toggle("closed");
   }
 </script>
     <div class="modal fade" id="promotionModal" tabindex="-1" aria-labelledby="promotionModalLabel" aria-hidden="true">
