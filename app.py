@@ -182,10 +182,17 @@ def evaluate_move():
             board_before = chess.Board(fen_before)
             board_after = chess.Board(fen_after)
 
+            # Check if the player checkmated the AI
+            if board_after.is_checkmate():
+                return jsonify({
+                    'cpl': 0,  # No change in centipawn loss since the game is over
+                    'score': 10,  # Perfect score for checkmate
+                    'feedback': "Checkmate! You won the game."
+                })
+
             info_before = engine.analyse(board_before, chess.engine.Limit(depth=15))
             info_after = engine.analyse(board_after, chess.engine.Limit(depth=15))
 
-            # 🟢 Correct: get the Score object by calling .white()
             score_before = info_before['score'].white()
             score_after = info_after['score'].white()
 

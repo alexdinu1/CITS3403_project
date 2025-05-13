@@ -402,7 +402,7 @@ function startGame(difficulty) {
         $('.container.text-center').html(`
             <div id="moveCard" class="card mt-1" style="background-color: white; max-width: 65vh; margin: auto;">
                 <div class="card-body">
-                    <p class="card-text fs-5" id="moveText" style="text-align: left;">No moves yet.</p>
+                    <p class="card-text fs-5" id="moveText" style="text-align: left; color: black">No moves yet.</p>
                     <p class="card-text fs-5" id="scoreText" style="text-align: left;"></p>
                 </div>
             </div>
