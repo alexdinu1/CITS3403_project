@@ -139,6 +139,28 @@ async function playAIMove() {
     }
 }
 
+function getGameResult() {
+    if (game.isCheckmate()) {
+        return game.turn() === 'w' ? '0-1' : '1-0';
+    }
+    if (game.isDraw()) {
+        return '1/2-1/2';
+    }
+    return '*';
+}
+
+function showGameResult(result) {
+    let message = "";
+    switch(result) {
+        case '1-0': message = "White wins!"; break;
+        case '0-1': message = "Black wins!"; break;
+        case '1/2-1/2': message = "Draw!"; break;
+        default: message = "Game ended"; break;
+    }
+    
+    alert(message);
+}
+
 async function evaluatePlayerMove(fenBefore, fenAfter) {
     try {
         const response = await fetch('/evaluate_move', {
@@ -161,7 +183,6 @@ async function evaluatePlayerMove(fenBefore, fenAfter) {
     }
 }
 
-// Modify onSquareClick to evaluate the player's move
 function onSquareClick(square) {
     if (moveValidationEnabled) {
         const moves = game.moves({ square, verbose: true });
@@ -172,7 +193,67 @@ function onSquareClick(square) {
             highlightSquares(square, moves.map(m => m.to));
         } else {
             const fenBefore = game.fen(); // Save FEN before the move
-            const move = game.move({ from: selectedSquare, to: square });
+            const pieceAtFrom = game.get(selectedSquare);
+            const isPromotionSquare = (square[1] === '8' || square[1] === '1');
+            const isPawnPromotion = pieceAtFrom && pieceAtFrom.type === 'p' && isPromotionSquare;
+
+            if (isPawnPromotion) {
+                // Determine the piece color based on the player's orientation
+                const pieceColor = boardOrientation === 'white' ? 'w' : 'b';
+
+                // Update the modal images dynamically
+                $('#promotionQueen').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}Q.png`);
+                $('#promotionRook').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}R.png`);
+                $('#promotionBishop').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}B.png`);
+                $('#promotionKnight').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}N.png`);
+ 
+
+                // Move execution happens INSIDE modal click handler
+                $('#promotionModal').modal('show');
+
+                $('.promotion-piece').off('click').on('click', function () {
+                    const promotionPiece = $(this).data('piece'); // q, r, b, n
+
+                    const move = game.move({
+                        from: selectedSquare,
+                        to: square,
+                        promotion: promotionPiece
+                    });
+
+                    if (move === null) {
+                        selectedSquare = null;
+                        removeHighlights();
+                        $('#promotionModal').modal('hide');
+                        return;
+                    }
+
+                    $('#moveText').html(`Moved from <b>${move.from}</b> to <b>${move.to}</b>`);
+                    board1.position(game.fen());
+                    selectedSquare = null;
+                    removeHighlights();
+
+                    const fenAfter = game.fen();
+                    evaluatePlayerMove(fenBefore, fenAfter);
+
+                    moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
+                    moveHistory.push(game.fen());
+                    currentMoveIndex++;
+                    updateNavigationButtons();
+
+                    playAIMove();
+
+                    $('#promotionModal').modal('hide');
+                });
+
+                return; // Important: stop here, wait for modal choice
+            }
+
+            // If no promotion, normal move execution
+            const move = game.move({
+                from: selectedSquare,
+                to: square
+            });
+
             if (move === null) {
                 selectedSquare = null;
                 removeHighlights();
@@ -184,9 +265,7 @@ function onSquareClick(square) {
             selectedSquare = null;
             removeHighlights();
 
-            const fenAfter = game.fen(); // Save FEN after the move
-
-            // Evaluate the player's move
+            const fenAfter = game.fen();
             evaluatePlayerMove(fenBefore, fenAfter);
 
             moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
@@ -194,7 +273,6 @@ function onSquareClick(square) {
             currentMoveIndex++;
             updateNavigationButtons();
 
-            // Trigger AI move
             playAIMove();
         }
     } else {
@@ -337,8 +415,19 @@ function startGame(difficulty) {
         updateNavigationButtons();
 
         // Add click event to redirect to the stats page
-        $('#resignButton').click(() => {
-            window.location.href = '/stats'; // Redirect to the stats page
+        $('#resignButton').click(async () => {
+            const result = boardOrientation === 'white' ? '0-1' : '1-0';
+            const confirmation = confirm(`Are you sure you want to resign? This will count as a ${result === '1-0' ? 'win' : 'loss'} for the AI.`);
+            
+            if (confirmation) {
+                await saveGame(
+                    game.pgn(),
+                    boardOrientation === 'white' ? "Player" : "AI",
+                    boardOrientation === 'white' ? "AI" : "Player",
+                    result
+                );
+                window.location.href = '/stats'; // Redirect to the stats page
+            }
         });
 
         // If playing as black, let Stockfish (white) make the first move
@@ -347,6 +436,38 @@ function startGame(difficulty) {
             playAIMove(); // Trigger Stockfish's first move
         }
     });
+}
+
+async function saveGame(pgn, white, black, result) {
+    try {
+        console.log("Attempting to save game:", { pgn, white, black, result });
+        
+        const response = await fetch('/save_game', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                pgn: pgn,
+                white: white || "Player",  // Default values
+                black: black || "AI",
+                result: result || "*"      // '*' means unfinished
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || "Failed to save game");
+        }
+
+        console.log("Game saved successfully:", data);
+        return data;
+    } catch (error) {
+        console.error("Error saving game:", error);
+        // Consider showing an error message to the user
+        return { error: error.message };
+    }
 }
 
 // Helper function to update the state of the Previous and Next buttons
