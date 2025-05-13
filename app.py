@@ -107,9 +107,9 @@ def get_ai_move():
             board = chess.Board(fen)
 
             engine.configure({'Skill Level': settings['skill_level']})
-            result = engine.play(board, chess.engine.Limit(depth=settings['depth']))
+            result = engine.play(board, chess.engine.Limit(depth=settings['depth'], time=1))
 
-            info = engine.analyse(board, chess.engine.Limit(depth=settings['depth']))
+            info = engine.analyse(board, chess.engine.Limit(depth=settings['depth'], time=1))
             evaluation = None
 
             score_obj = info['score'].white()
@@ -143,7 +143,7 @@ def get_evaluation():
     difficulty_settings = {
         'easy': {'skill_level': 1, 'depth': 10},
         'medium': {'skill_level': 10, 'depth': 12},
-        'hard': {'skill_level': 20, 'depth': None}
+        'hard': {'skill_level': 20, 'depth': 20}
     }
     settings = difficulty_settings.get(difficulty, difficulty_settings['medium'])
 

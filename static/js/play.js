@@ -177,7 +177,7 @@ async function evaluatePlayerMove(fenBefore, fenAfter) {
 
         // Display the score and feedback
         const { cpl, score, feedback } = data;
-        $('#scoreText').html(`<b>Score:</b> ${score} – ${feedback}`);
+        $('#scoreText').html(`<span class="black-text"><b>Score:</b> ${score} – ${feedback}</span>`);
     } catch (error) {
         console.error("Error fetching evaluation:", error);
     }
@@ -227,7 +227,7 @@ function onSquareClick(square) {
                         return;
                     }
 
-                    $('#moveText').html(`Moved from <b>${move.from}</b> to <b>${move.to}</b>`);
+                    $('#moveText').html(`<span class="black-text">Moved from <b>${move.from}</b> to <b>${move.to}</b></span>`);
                     board1.position(game.fen());
                     selectedSquare = null;
                     removeHighlights();
@@ -260,7 +260,7 @@ function onSquareClick(square) {
                 return;
             }
 
-            $('#moveText').html(`Moved from <b>${move.from}</b> to <b>${move.to}</b>`);
+            $('#moveText').html(`<span class="black-text">Moved from <b>${move.from}</b> to <b>${move.to}</b></span>`);
             board1.position(game.fen());
             selectedSquare = null;
             removeHighlights();
@@ -346,7 +346,6 @@ function setupPlayButton() {
     $('#playGame').click(() => {
         playPressed = true;
         $('.column button').fadeOut();
-        $('#board1').parent().animate({ marginTop: '-10vh' }, 500);
         $('#playGame, #backButton').fadeOut(() => {
             setupDifficultyButtons();
         });
