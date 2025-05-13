@@ -138,8 +138,27 @@
     }
   }
 </script>
+    <div class="modal fade" id="promotionModal" tabindex="-1" aria-labelledby="promotionModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="promotionModalLabel">Promote Pawn</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-center">
+            <div class="d-flex justify-content-around">
+              <img id="promotionQueen" alt="Queen" class="promotion-piece" data-piece="q" style="width: 50px; cursor: pointer;">
+              <img id="promotionRook" alt="Rook" class="promotion-piece" data-piece="r" style="width: 50px; cursor: pointer;">
+              <img id="promotionBishop" alt="Bishop" class="promotion-piece" data-piece="b" style="width: 50px; cursor: pointer;">
+              <img id="promotionKnight" alt="Knight" class="promotion-piece" data-piece="n" style="width: 50px; cursor: pointer;">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-<!-- Link to your game logic -->
-<script src="{{ url_for('static', filename='js/play.js') }}"></script>
-</body>
+    <!-- Link to play.js -->
+    <script src="{{ url_for('static', filename='js/play.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
 </html>
