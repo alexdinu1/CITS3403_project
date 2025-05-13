@@ -198,6 +198,23 @@ function onSquareClick(square) {
             const isPawnPromotion = pieceAtFrom && pieceAtFrom.type === 'p' && isPromotionSquare;
 
             if (isPawnPromotion) {
+                // Validate the move
+                const dryRunMove = game.move({
+                    from: selectedSquare,
+                    to: square,
+                    promotion: 'q' // Temporary promotion for validation
+                });
+
+                if (dryRunMove === null) {
+                    // Invalid move, do nothing
+                    selectedSquare = null;
+                    removeHighlights();
+                    return;
+                }
+
+                // Revert the move after validation
+                game.undo();
+
                 // Determine the piece color based on the player's orientation
                 const pieceColor = boardOrientation === 'white' ? 'w' : 'b';
 
@@ -206,9 +223,8 @@ function onSquareClick(square) {
                 $('#promotionRook').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}R.png`);
                 $('#promotionBishop').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}B.png`);
                 $('#promotionKnight').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}N.png`);
- 
 
-                // Move execution happens INSIDE modal click handler
+                // Show the promotion modal
                 $('#promotionModal').modal('show');
 
                 $('.promotion-piece').off('click').on('click', function () {
@@ -245,7 +261,7 @@ function onSquareClick(square) {
                     $('#promotionModal').modal('hide');
                 });
 
-                return; // Important: stop here, wait for modal choice
+                return; // Stop here, wait for modal choice
             }
 
             // If no promotion, normal move execution
