@@ -21,6 +21,8 @@
       <div class="d-flex justify-content-center gap-3">
         <button class="btn btn-primary" onclick="playGame()">Play</button>
         <button class="btn btn-secondary" onclick="viewStats()">View Stats</button>
+        <button class="btn btn-primary" onclick="viewFriends()">Friends</button>
+        <button class="btn btn-secondary" onclick="viewIndex()">Go Back</button>
       </div>
     </div>
     <script>
@@ -29,6 +31,12 @@
       }
       function viewStats() {
         window.location.href = "{{ url_for('stats') }}";
+      }
+      function viewFriends() {
+        window.location.href = "{{ url_for('friends') }}";
+      }
+      function viewIndex() {
+        window.location.href = '/'
       }
     </script>
   </body>
