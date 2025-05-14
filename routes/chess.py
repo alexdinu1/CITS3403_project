@@ -114,16 +114,25 @@ def get_evaluation():
 def evaluate_move():
     data = request.json
     fen_before = data.get('fen_before')
-    fen_after = data.get('fen_after')
+    move_uci = data.get('move')
 
-    if not fen_before or not fen_after:
-        return jsonify({'error': 'Missing FEN(s)'}), 400
+    if not fen_before or not move_uci:
+        return jsonify({'error': 'Missing FEN or move'}), 400
 
     try:
-        with chess.engine.SimpleEngine.popen_uci(get_stockfish_path()) as engine:
-            board_before = chess.Board(fen_before)
-            board_after = chess.Board(fen_after)
+        board_before = chess.Board(fen_before)
+        try:
+            move = chess.Move.from_uci(move_uci)
+        except Exception:
+            return jsonify({'error': 'Invalid move format'}), 400
 
+        if move not in board_before.legal_moves:
+            return jsonify({'error': 'Illegal move'}), 400
+
+        board_after = board_before.copy()
+        board_after.push(move)
+
+        with chess.engine.SimpleEngine.popen_uci(get_stockfish_path()) as engine:
             # Check if the player checkmated the AI
             if board_after.is_checkmate():
                 return jsonify({
