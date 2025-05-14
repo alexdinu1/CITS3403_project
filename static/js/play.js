@@ -10,6 +10,17 @@ let aiMoveRequestId = 0;
 let moveHistory = []; // Track the history of FEN positions
 let currentMoveIndex = 0; // Track the current position in the history
 
+// Only do this once, probably at app start or page load:
+$(document).ready(() => {
+    $(window).on('resize', () => {
+        if (board1 && typeof board1.resize === 'function') {
+            board1.resize();
+        }
+    });
+
+    initializeBoard('white'); // or your default orientation
+});
+
 // Initialize board with custom click-to-move interaction
 function initializeBoard(orientation) {
     boardOrientation = orientation;
@@ -29,12 +40,10 @@ function initializeBoard(orientation) {
     });
 
     // Bind click events to squares
-    $('#board1 .square-55d63').off('click').on('click', function () {
-        const square = $(this).data('square'); // Get the square from the clicked element
+    $('#board1').off('click', '.square-55d63').on('click', '.square-55d63', function () {
+        const square = $(this).data('square');
         onSquareClick(square);
     });
-
-    $(window).resize(() => board1.resize());
 
     console.log(`Board initialized with orientation: ${orientation}`);
 }
