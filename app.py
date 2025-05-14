@@ -1,7 +1,9 @@
+from io import StringIO
 import os
 import platform
 import chess
 import chess.engine
+import chess.pgn
 import json
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
@@ -44,6 +46,14 @@ def init_db():
     with app.app_context():
         db.create_all()
     print('Initialized the database.')
+
+# Clear all data in database
+@app.cli.command('clear-db')
+def clear_db():
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        print("All data has been removed.")
 
 @app.route('/')
 def index():
@@ -257,46 +267,88 @@ if __name__ == '__main__':
 @app.route('/save_game', methods=['POST'])
 def save_game():
     data = request.get_json()
-    
-    game = Game(
-        pgn=data['pgn'],
-        white_player=data['white'],
-        black_player=data['black'],
-        result=data['result'],
-        user_id=data['user_id']
-    )
-    
-    db.session.add(game)
-    db.session.commit()
-    
-    # Update stats
-    update_stats(data['white'], data['black'], data['result'])
-    
-    return jsonify({"status": "success", "game_id": game.id})
+
+    required_fields = ['pgn', 'white', 'black', 'result']
+    if not all(field in data for field in required_fields):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    try:
+        game = Game(
+            pgn=data['pgn'],
+            white_player=data['white'],
+            black_player=data['black'],
+            result=data['result'],
+            user_id=data['user_id']
+        )
+        
+        db.session.add(game)
+        db.session.commit()
+        app.logger.info(f"Game saved with ID: {game.id}")
+
+        pgn = StringIO(data['pgn'])
+        chess_game = chess.pgn.read_game(pgn)
+
+        if not chess_game:
+            return jsonify({'error': 'Invalid PGN'}), 400
+        
+        board = chess.Board()
+        move_number = 1
+
+        for move in chess_game.mainline_moves():
+            try:
+                san = board.san(move)
+                board.push(move)
+                move_entry = Move(
+                    game_id = game.id,
+                    move_number=move_number,
+                    san = san,
+                    uci = move.uci(),
+                    fen = board.fen(),
+                    score = None
+                )
+                db.session.add(move_entry)
+                app.logger.info(f"Added move {move_number}: {move.uci()}")
+                move_number += 1
+            except Exception as e:
+                app.logger.error(f"Erorr processing move {move}: {e}")
+                return jsonify({'error': f'Invalid move in PGN: {move}'}), 400
+        
+        db.session.commit()
+        app.logger.info("Move committed successfully.")
+
+        update_stats(data['white'], data['black'], data['result'])
+
+        return jsonify({'status': 'success', 'game_id': game.id})
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error saving game: {e}")
+        return jsonify({'error': str(e)}), 500
 
 def update_stats(white, black, result):
-    # Get or create players
-    white_stats = PlayerStats.query.filter_by(player_name=white).first()
-    if not white_stats:
-        white_stats = PlayerStats(player_name=white)
-        db.session.add(white_stats)
+    current_user_id = session.get('user_id')
+    if not current_user_id:
+        app.logger.error("No user is logged in")
+        return jsonify({'error': 'No user is logged in'}), 401
     
-    black_stats = PlayerStats.query.filter_by(player_name=black).first()
-    if not black_stats:
-        black_stats = PlayerStats(player_name=black)
-        db.session.add(black_stats)
+    current_user_stats = PlayerStats.query.filter_by(user_id = current_user_id).first()
+    if not current_user_stats:
+        current_user_stats = PlayerStats(user_id = current_user_id)
+        db.session.add(current_user_stats)
     
-    # Update stats
     if result == '1-0':
-        white_stats.wins += 1
-        black_stats.losses += 1
+        if white == session.get('Player'):
+            current_user_stats.wins += 1
+        elif black == session.get('Player'):
+            current_user_stats.losses += 1
     elif result == '0-1':
-        black_stats.wins += 1
-        white_stats.losses += 1
+        if black == session.get('Player'):
+            current_user_stats.wins += 1
+        elif white == session.get('Player'):
+            current_user_stats.losses += 1
     else:
-        white_stats.draws += 1
-        black_stats.draws += 1
-    
+        if white == session.get('Player') or black == session.get('Player'):
+            current_user_stats.draws += 1
+
     db.session.commit()
 
 @app.route('/player_stats/<player_name>')
@@ -326,7 +378,9 @@ def login():
             
         if not user or not check_password_hash(user.password_hash, data.get('password', '')):
             return jsonify({"error": "Invalid username or password"}), 401
-            
+
+        session['user_id'] = user.id
+
         user.last_login = datetime.utcnow()
         db.session.commit()
         
