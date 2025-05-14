@@ -5,6 +5,7 @@ let boardOrientation = 'white'; // Default
 let moveValidationEnabled = false; // Flag to enable/disable move validation
 let selectedDifficulty = 'medium'; // Default difficulty
 let playPressed = false; // Flag to check if the play button was pressed
+let aiMoveRequestId = 0;
 
 let moveHistory = []; // Track the history of FEN positions
 let currentMoveIndex = 0; // Track the current position in the history
@@ -110,12 +111,22 @@ function updateScoreText(evaluation) {
 
 async function playAIMove() {
     const fenBefore = game.fen();
+    const thisRequestId = ++aiMoveRequestId; // Increment and capture current request ID
     const aiResponse = await getAIMove(fenBefore);
+
+    // If another move has been made since this request started, ignore this response
+    if (thisRequestId !== aiMoveRequestId) {
+        console.log("Discarding stale AI move");
+        return;
+    }
 
     if (aiResponse && aiResponse.move) {
         const aiMove = aiResponse.move;
 
         setTimeout(() => {
+            // Again, double-check before applying
+            if (thisRequestId !== aiMoveRequestId) return;
+
             const moveResult = game.move({
                 from: aiMove.slice(0, 2),
                 to: aiMove.slice(2, 4),
@@ -131,7 +142,6 @@ async function playAIMove() {
                 moveHistory.push(game.fen());
                 currentMoveIndex++;
                 updateNavigationButtons();
-
             }
         }, 1000);
     } else {
@@ -177,7 +187,7 @@ async function evaluatePlayerMove(fenBefore, fenAfter) {
 
         // Display the score and feedback
         const { cpl, score, feedback } = data;
-        $('#scoreText').html(`<b>Score:</b> ${score} – ${feedback}`);
+        $('#scoreText').html(`<span class="black-text"><b>Score:</b> ${score} – ${feedback}</span>`);
     } catch (error) {
         console.error("Error fetching evaluation:", error);
     }
@@ -198,6 +208,23 @@ function onSquareClick(square) {
             const isPawnPromotion = pieceAtFrom && pieceAtFrom.type === 'p' && isPromotionSquare;
 
             if (isPawnPromotion) {
+                // Validate the move
+                const dryRunMove = game.move({
+                    from: selectedSquare,
+                    to: square,
+                    promotion: 'q' // Temporary promotion for validation
+                });
+
+                if (dryRunMove === null) {
+                    // Invalid move, do nothing
+                    selectedSquare = null;
+                    removeHighlights();
+                    return;
+                }
+
+                // Revert the move after validation
+                game.undo();
+
                 // Determine the piece color based on the player's orientation
                 const pieceColor = boardOrientation === 'white' ? 'w' : 'b';
 
@@ -206,9 +233,8 @@ function onSquareClick(square) {
                 $('#promotionRook').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}R.png`);
                 $('#promotionBishop').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}B.png`);
                 $('#promotionKnight').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}N.png`);
- 
 
-                // Move execution happens INSIDE modal click handler
+                // Show the promotion modal
                 $('#promotionModal').modal('show');
 
                 $('.promotion-piece').off('click').on('click', function () {
@@ -227,7 +253,7 @@ function onSquareClick(square) {
                         return;
                     }
 
-                    $('#moveText').html(`Moved from <b>${move.from}</b> to <b>${move.to}</b>`);
+                    $('#moveText').html(`<span class="black-text">Moved from <b>${move.from}</b> to <b>${move.to}</b></span>`);
                     board1.position(game.fen());
                     selectedSquare = null;
                     removeHighlights();
@@ -245,7 +271,7 @@ function onSquareClick(square) {
                     $('#promotionModal').modal('hide');
                 });
 
-                return; // Important: stop here, wait for modal choice
+                return; // Stop here, wait for modal choice
             }
 
             // If no promotion, normal move execution
@@ -260,7 +286,7 @@ function onSquareClick(square) {
                 return;
             }
 
-            $('#moveText').html(`Moved from <b>${move.from}</b> to <b>${move.to}</b>`);
+            $('#moveText').html(`<span class="black-text">Moved from <b>${move.from}</b> to <b>${move.to}</b></span>`);
             board1.position(game.fen());
             selectedSquare = null;
             removeHighlights();
@@ -346,7 +372,6 @@ function setupPlayButton() {
     $('#playGame').click(() => {
         playPressed = true;
         $('.column button').fadeOut();
-        $('#board1').parent().animate({ marginTop: '-10vh' }, 500);
         $('#playGame, #backButton').fadeOut(() => {
             setupDifficultyButtons();
         });
@@ -403,7 +428,7 @@ function startGame(difficulty) {
         $('.container.text-center').html(`
             <div id="moveCard" class="card mt-1" style="background-color: white; max-width: 65vh; margin: auto;">
                 <div class="card-body">
-                    <p class="card-text fs-5" id="moveText" style="text-align: left;">No moves yet.</p>
+                    <p class="card-text fs-5" id="moveText" style="text-align: left; color: black">No moves yet.</p>
                     <p class="card-text fs-5" id="scoreText" style="text-align: left;"></p>
                 </div>
             </div>
@@ -511,22 +536,34 @@ $(document).on('click', '#prevMove', () => {
     if (currentMoveIndex > 0) {
         currentMoveIndex--;
         const fen = moveHistory[currentMoveIndex];
-        game.load(fen); // Synchronize the game state with the FEN
-        board1.position(fen); // Animate back
+        game.load(fen);
+        board1.position(fen);
         console.log(`Moved back to index ${currentMoveIndex}`);
-        updateNavigationButtons(); // Update button states
+        updateNavigationButtons();
+
+        aiMoveRequestId++; // Invalidate any in-flight AI move
+
+        // Check if it's AI's turn (i.e., NOT the player's turn)
+        if (game.turn() !== boardOrientation[0]) {
+            playAIMove(); // Trigger AI
+        }
     }
 });
-
 // Modify the Next button click handler
 $(document).on('click', '#nextMove', () => {
     if (currentMoveIndex < moveHistory.length - 1) {
         currentMoveIndex++;
         const fen = moveHistory[currentMoveIndex];
         game.load(fen);
-        board1.position(fen); // Animate forward
+        board1.position(fen);
         console.log(`Moved forward to index ${currentMoveIndex}`);
-        updateNavigationButtons(); // Update button states
+        updateNavigationButtons();
+
+        aiMoveRequestId++; // Invalidate any in-flight AI move
+
+        if (game.turn() !== boardOrientation[0]) {
+            playAIMove(); // Trigger AI
+        }
     }
 });
 
