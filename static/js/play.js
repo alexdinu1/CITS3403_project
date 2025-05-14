@@ -5,6 +5,7 @@ let boardOrientation = 'white'; // Default
 let moveValidationEnabled = false; // Flag to enable/disable move validation
 let selectedDifficulty = 'medium'; // Default difficulty
 let playPressed = false; // Flag to check if the play button was pressed
+let aiMoveRequestId = 0;
 
 let moveHistory = []; // Track the history of FEN positions
 let currentMoveIndex = 0; // Track the current position in the history
@@ -110,12 +111,22 @@ function updateScoreText(evaluation) {
 
 async function playAIMove() {
     const fenBefore = game.fen();
+    const thisRequestId = ++aiMoveRequestId; // Increment and capture current request ID
     const aiResponse = await getAIMove(fenBefore);
+
+    // If another move has been made since this request started, ignore this response
+    if (thisRequestId !== aiMoveRequestId) {
+        console.log("Discarding stale AI move");
+        return;
+    }
 
     if (aiResponse && aiResponse.move) {
         const aiMove = aiResponse.move;
 
         setTimeout(() => {
+            // Again, double-check before applying
+            if (thisRequestId !== aiMoveRequestId) return;
+
             const moveResult = game.move({
                 from: aiMove.slice(0, 2),
                 to: aiMove.slice(2, 4),
@@ -131,7 +142,6 @@ async function playAIMove() {
                 moveHistory.push(game.fen());
                 currentMoveIndex++;
                 updateNavigationButtons();
-
             }
         }, 1000);
     } else {
@@ -526,22 +536,34 @@ $(document).on('click', '#prevMove', () => {
     if (currentMoveIndex > 0) {
         currentMoveIndex--;
         const fen = moveHistory[currentMoveIndex];
-        game.load(fen); // Synchronize the game state with the FEN
-        board1.position(fen); // Animate back
+        game.load(fen);
+        board1.position(fen);
         console.log(`Moved back to index ${currentMoveIndex}`);
-        updateNavigationButtons(); // Update button states
+        updateNavigationButtons();
+
+        aiMoveRequestId++; // Invalidate any in-flight AI move
+
+        // Check if it's AI's turn (i.e., NOT the player's turn)
+        if (game.turn() !== boardOrientation[0]) {
+            playAIMove(); // Trigger AI
+        }
     }
 });
-
 // Modify the Next button click handler
 $(document).on('click', '#nextMove', () => {
     if (currentMoveIndex < moveHistory.length - 1) {
         currentMoveIndex++;
         const fen = moveHistory[currentMoveIndex];
         game.load(fen);
-        board1.position(fen); // Animate forward
+        board1.position(fen);
         console.log(`Moved forward to index ${currentMoveIndex}`);
-        updateNavigationButtons(); // Update button states
+        updateNavigationButtons();
+
+        aiMoveRequestId++; // Invalidate any in-flight AI move
+
+        if (game.turn() !== boardOrientation[0]) {
+            playAIMove(); // Trigger AI
+        }
     }
 });
 
