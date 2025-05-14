@@ -115,12 +115,11 @@ def get_ai_move():
 
         with chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH) as engine:
             engine.configure({'Skill Level': settings['skill_level']})
-            result = engine.play(board, chess.engine.Limit(depth=settings['depth']))
+            result = engine.play(board, chess.engine.Limit(depth=settings['depth'], time=1))
 
             # Default to None unless a valid move is returned
             move = result.move.uci() if result.move else None
             game_over = result.move is None
-
             evaluation = None
             try:
                 info = engine.analyse(board, chess.engine.Limit(depth=settings['depth']))
@@ -157,7 +156,7 @@ def get_evaluation():
     difficulty_settings = {
         'easy': {'skill_level': 1, 'depth': 10},
         'medium': {'skill_level': 10, 'depth': 12},
-        'hard': {'skill_level': 20, 'depth': None}
+        'hard': {'skill_level': 20, 'depth': 20}
     }
     settings = difficulty_settings.get(difficulty, difficulty_settings['medium'])
 
@@ -196,10 +195,17 @@ def evaluate_move():
             board_before = chess.Board(fen_before)
             board_after = chess.Board(fen_after)
 
+            # Check if the player checkmated the AI
+            if board_after.is_checkmate():
+                return jsonify({
+                    'cpl': 0,  # No change in centipawn loss since the game is over
+                    'score': 10,  # Perfect score for checkmate
+                    'feedback': "Checkmate! You won the game."
+                })
+
             info_before = engine.analyse(board_before, chess.engine.Limit(depth=15))
             info_after = engine.analyse(board_after, chess.engine.Limit(depth=15))
 
-            # 🟢 Correct: get the Score object by calling .white()
             score_before = info_before['score'].white()
             score_after = info_after['score'].white()
 
