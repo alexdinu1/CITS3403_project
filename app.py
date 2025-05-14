@@ -103,28 +103,42 @@ def get_ai_move():
     settings = difficulty_settings.get(difficulty, difficulty_settings['medium'])
 
     try:
-        with chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH) as engine:
-            board = chess.Board(fen)
+        board = chess.Board(fen)
 
+        if board.is_game_over():
+            return jsonify({
+                'move': None,
+                'evaluation': None,
+                'game_over': True,
+                'result': board.result()  # e.g., '1-0', '0-1', '1/2-1/2'
+            })
+
+        with chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH) as engine:
             engine.configure({'Skill Level': settings['skill_level']})
             result = engine.play(board, chess.engine.Limit(depth=settings['depth']))
 
-            info = engine.analyse(board, chess.engine.Limit(depth=settings['depth']))
+            # Default to None unless a valid move is returned
+            move = result.move.uci() if result.move else None
+            game_over = result.move is None
+
             evaluation = None
+            try:
+                info = engine.analyse(board, chess.engine.Limit(depth=settings['depth']))
+                score_obj = info['score'].white()
 
-            score_obj = info['score'].white()
-
-            if isinstance(score_obj, chess.engine.Cp):
-                evaluation = score_obj.score()
-            elif isinstance(score_obj, chess.engine.Mate):
-                mate_val = score_obj.mate()
-                evaluation = 100000 if mate_val > 0 else -100000
-            else:
-                evaluation = 0
+                if isinstance(score_obj, chess.engine.Cp):
+                    evaluation = score_obj.score()
+                elif isinstance(score_obj, chess.engine.Mate):
+                    mate_val = score_obj.mate()
+                    evaluation = 100000 if mate_val > 0 else -100000
+            except Exception:
+                # Analysis might fail if game is over or depth is too shallow
+                evaluation = None
 
             return jsonify({
-                'move': result.move.uci(),
-                'evaluation': evaluation
+                'move': move,
+                'evaluation': evaluation,
+                'game_over': game_over
             })
 
     except Exception as e:
