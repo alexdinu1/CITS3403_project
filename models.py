@@ -25,7 +25,6 @@ class Game(db.Model):
     black_player = db.Column(db.String(50))
     result = db.Column(db.String(10))
     date_played = db.Column(db.DateTime, default=datetime.utcnow)
-    analyzed = db.Column(db.Boolean, default=False)
     
     # Relationships
     moves = db.relationship('Move', backref='game', lazy=True, order_by='Move.move_number')

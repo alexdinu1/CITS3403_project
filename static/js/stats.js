@@ -141,30 +141,11 @@ async function fetchGameAnalysis(gameId) {
       // Show loading state
       document.getElementById('gameInsights').innerHTML = "<p>Analyzing game moves...</p>";
 
-      // First try to get existing analysis
-      let response = await fetch(`/api/game_analysis/${gameId}`);
+      // Single endpoint call that handles both new and existing analysis
+      const response = await fetch(`/api/game_analysis/${gameId}`);
       
-      // If no analysis exists or it's not yet analyzed, request analysis
-      if (response.status === 404 || !response.ok) {
-          console.log("No existing analysis found. Requesting analysis...");
-          
-          // Request server to analyze the game
-          response = await fetch(`/analyze_game/${gameId}`, {
-              method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json'
-              }
-          });
-          
-          if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          
-          // If we just analyzed the game, get the fresh analysis
-          response = await fetch(`/api/game_analysis/${gameId}`);
-          if (!response.ok) {
-              throw new Error(`Failed to get fresh analysis: ${response.status}`);
-          }
+      if (!response.ok) {
+          throw new Error(`Failed to get analysis: ${response.status}`);
       }
 
       const analysis = await response.json();
@@ -175,24 +156,13 @@ async function fetchGameAnalysis(gameId) {
           return [];
       }
 
-      // Transform data to match our expected structure if needed
-      const formattedAnalysis = analysis.map(item => ({
-          move_number: item.move_number,
-          score: item.score,
-          is_blunder: item.is_blunder,
-          is_brilliant: item.is_brilliant,
-          comment: item.comment
-      }));
-
-      // Sort by move number just in case
-      formattedAnalysis.sort((a, b) => a.move_number - b.move_number);
+      // Sort by move number
+      analysis.sort((a, b) => a.move_number - b.move_number);
       
-      console.log("Analysis data received:", formattedAnalysis);
-      return formattedAnalysis;
+      return analysis;
 
   } catch (error) {
       console.error("Error fetching game analysis:", error);
-      // Show error message to user
       document.getElementById('gameInsights').innerHTML = 
           `<p>Couldn't load game analysis: ${error.message}</p>`;
       return [];

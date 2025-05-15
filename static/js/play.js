@@ -724,24 +724,34 @@ async function saveGame(pgn, white, black, result) {
     const data = await response.json();
     console.log("Game saved successfully:", data);
 
-    // Store the game ID in localStorage for move recording
-    if (data.game_id) {
-      const updatedUserData = { ...userData, current_game_id: data.game_id };
-      localStorage.setItem("user", JSON.stringify(updatedUserData));
-
-      // Process any queued moves if they exist
-      if (moveRecordingQueue.length > 0) {
-        console.log("Processing queued moves...");
-        for (const moveData of moveRecordingQueue) {
-          await recordMove(data.game_id, moveData);
-        }
-        moveRecordingQueue = []; // Clear the queue after processing
-      }
-    }
+    
 
     return data;
   } catch (error) {
     console.error("Error saving game:", error);
+    return { error: error.message };
+  }
+}
+
+async function saveAnalysis() {
+  try {
+    // Get user data from localStorage or API
+    const userData = await getUserData();
+
+    // Check if we have valid user data
+    if (!userData) {
+      console.error("No user data available - cannot save game");
+      return { error: "User not authenticated" };
+    }
+
+    // Extract user ID - handle both user_id and id properties
+    const userId = userData.user_id || userData.id;
+    if (!userId) {
+      console.error("User ID not found in user data");
+      return { error: "Invalid user data" };
+    } 
+  } catch (error) {
+    console.error("Error saving analysis:", error);
     return { error: error.message };
   }
 }
@@ -845,6 +855,15 @@ setupPlayButton();
 function showCheckmateOptions() {
   // Determine the winner
   const winner = game.turn() === "w" ? "Black" : "White";
+  const result = winner === 'White' ? '1-0' : '0-1';
+
+  // Save the game result before showing the modal
+  saveGame(
+    game.pgn(),
+    boardOrientation === 'white' ? "Player" : "AI",
+    boardOrientation === 'black' ? "AI" : "Player",
+    result
+);
 
   $("#resignButton").replaceWith(`
         <button id="newGameButton" class="btn btn-success mt-3 fs-5">New Game</button>
