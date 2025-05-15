@@ -2,28 +2,38 @@ import os
 import platform
 from pathlib import Path
 from flask import Flask, render_template, redirect, url_for
+from flask_cors import CORS
 from flask_migrate import Migrate
 from models import db
+import logging
 
 # Import blueprints from routes
 from routes.auth import auth_bp
 from routes.chess import chess_bp
 from routes.stats import stats_bp
 from routes.friends import friends_bp
+from routes.analysis import analysis_bp
+from routes.move import move_bp
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
+
+CORS(app)
 
 basedir = Path(__file__).parent
 instance_path = Path(app.instance_path)
 instance_path.mkdir(exist_ok=True)
 db_path = instance_path / 'app.db'
 
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = os.environ.get("SECRET_KEY", "dev")
 
 db.init_app(app)
 migrate = Migrate(app, db)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Stockfish path config (if needed by chess.py)
 if platform.system() == "Darwin":
@@ -40,6 +50,8 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(chess_bp)
 app.register_blueprint(stats_bp)
 app.register_blueprint(friends_bp)
+app.register_blueprint(analysis_bp)
+app.register_blueprint(move_bp)
 
 # CLI command to initialize the database
 @app.cli.command('init-db')

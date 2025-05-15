@@ -35,14 +35,7 @@ class Move(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, db.ForeignKey('game.id'), nullable=False)
     move_number = db.Column(db.Integer, nullable=False)
-    san = db.Column(db.String(10))  # Standard Algebraic Notation
-    uci = db.Column(db.String(10))  # Universal Chess Interface
-    fen = db.Column(db.String(100))  # Board state after move
-    score = db.Column(db.Float)     # Evaluation score
-    
-    __table_args__ = (
-        Index('idx_game_move', 'game_id', 'move_number'),
-    )
+    game_state = db.Column(db.String(100))  # Board state after move
 
 class PlayerStats(db.Model):
     id = db.Column(db.Integer, primary_key=True)

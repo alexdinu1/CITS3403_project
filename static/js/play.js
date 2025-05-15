@@ -1,427 +1,578 @@
 let board1;
 let game = new Chess(); // Use chess.js to manage game state
 let selectedSquare = null;
-let boardOrientation = 'white'; // Default
+let boardOrientation = "white"; // Default
 let moveValidationEnabled = false; // Flag to enable/disable move validation
-let selectedDifficulty = 'medium'; // Default difficulty
+let selectedDifficulty = "medium"; // Default difficulty
 let playPressed = false; // Flag to check if the play button was pressed
 let aiMoveRequestId = 0;
 
 let moveHistory = []; // Track the history of FEN positions
 let currentMoveIndex = 0; // Track the current position in the history
-
-// Only do this once, probably at app start or page load:
-$(document).ready(() => {
-    $(window).on('resize', () => {
-        if (board1 && typeof board1.resize === 'function') {
-            board1.resize();
-        }
-    });
-
-    initializeBoard('white'); // or your default orientation
-});
+let moveRecordingQueue = [];
+let isProcessingQueue = [];
 
 // Initialize board with custom click-to-move interaction
 function initializeBoard(orientation) {
-    boardOrientation = orientation;
-    game.reset(); // Reset game state
-    selectedSquare = null;
+  boardOrientation = orientation;
+  game.reset(); // Reset game state
+  selectedSquare = null;
 
-    // Reset move history when board initializes
-    moveHistory = [game.fen()];
-    currentMoveIndex = 0;
+  // Reset move history when board initializes
+  moveHistory = [game.fen()];
+  currentMoveIndex = 0;
 
-    board1 = ChessBoard('board1', {
-        position: 'start',
-        draggable: false, // Disable dragging
-        orientation: orientation,
-        pieceTheme: '/static/img/chesspieces/wikipedia/{piece}.png', // Optional: your theme path
-        moveSpeed: 400, // Enable smooth animations
+  board1 = ChessBoard("board1", {
+    position: "start",
+    draggable: false, // Disable dragging
+    orientation: orientation,
+    pieceTheme: "/static/img/chesspieces/wikipedia/{piece}.png", // Optional: your theme path
+    moveSpeed: 400, // Enable smooth animations
+  });
+
+  // Bind click events to squares
+  $("#board1 .square-55d63")
+    .off("click")
+    .on("click", function () {
+      const square = $(this).data("square"); // Get the square from the clicked element
+      onSquareClick(square);
     });
 
-    // Bind click events to squares
-    $('#board1').off('click', '.square-55d63').on('click', '.square-55d63', function () {
-        const square = $(this).data('square');
-        onSquareClick(square);
-    });
+  $(window).resize(() => board1.resize());
 
-    console.log(`Board initialized with orientation: ${orientation}`);
+  console.log(`Board initialized with orientation: ${orientation}`);
+}
+
+async function getUserData() {
+  try {
+    const storedUserData = localStorage.getItem("user");
+    if (storedUserData) {
+      const userData = JSON.parse(storedUserData);
+      if (userData && (userData.user_id || userData.id)) {
+        // If we have valid user data in localStorage, use it
+        console.log(userData);
+        return userData;
+      }
+    }
+
+    // If no valid localStorage data, try to get from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const userId = urlParams.get("user_id");
+
+    if (userId) {
+      // We have user ID in URL parameters
+      const userResponse = await fetch(`/api/current_user/${userId}`);
+      if (userResponse.ok) {
+        const userData = await userResponse.json();
+        // Save to localStorage for future use
+        localStorage.setItem("user", JSON.stringify(userData));
+        return userData;
+      }
+    }
+
+    // If no URL parameter or it failed, try to get from session endpoint
+    const response = await fetch("/api/current_user");
+    if (!response.ok) {
+      console.error("Not logged in or session expired");
+      return null;
+    }
+
+    const userData = await response.json();
+    // Save to localStorage for future use
+    localStorage.setItem("user", JSON.stringify(userData));
+    return userData;
+  } catch (error) {
+    console.error("Error getting user data:", error);
+    // If there was an error, clear localStorage to be safe
+    localStorage.removeItem("user");
+    return null;
+  }
 }
 
 async function getAIMove(fen) {
-    console.log("Sending FEN to Stockfish:", fen);
-    console.log("Selected difficulty:", selectedDifficulty);
-    try {
-        const response = await fetch('/get_ai_move', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fen, difficulty: selectedDifficulty })
-        });
+  console.log("Sending FEN to Stockfish:", fen);
+  console.log("Selected difficulty:", selectedDifficulty);
+  try {
+    const response = await fetch("/get_ai_move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fen, difficulty: selectedDifficulty }),
+    });
 
-        const data = await response.json();
-        if (data.error) {
-            console.error("Error received from Stockfish:", data.error);
-            return null;
-        }
-
-        console.log("Stockfish move received:", data.move, "Evaluation:", data.evaluation);
-        console.log("AI Response Evaluation:", data.evaluation);
-        return { move: data.move, evaluation: data.evaluation };
-    } catch (error) {
-        console.error("Error fetching AI move:", error);
-        return null;
+    const data = await response.json();
+    if (data.error) {
+      console.error("Error received from Stockfish:", data.error);
+      return null;
     }
+
+    console.log(
+      "Stockfish move received:",
+      data.move,
+      "Evaluation:",
+      data.evaluation
+    );
+    console.log("AI Response Evaluation:", data.evaluation);
+    return { move: data.move, evaluation: data.evaluation };
+  } catch (error) {
+    console.error("Error fetching AI move:", error);
+    return null;
+  }
 }
 
 async function getEvaluation(fen) {
-    try {
-        const response = await fetch('/get_evaluation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fen, difficulty: selectedDifficulty })
-        });
+  try {
+    const response = await fetch("/get_evaluation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fen, difficulty: selectedDifficulty }),
+    });
 
-        const data = await response.json();
-        if (data.error) {
-            console.error("Error received from evaluation:", data.error);
-            return null;
-        }
-
-        return data.evaluation;
-    } catch (error) {
-        console.error("Error fetching evaluation:", error);
-        return null;
+    const data = await response.json();
+    if (data.error) {
+      console.error("Error received from evaluation:", data.error);
+      return null;
     }
+
+    return data.evaluation;
+  } catch (error) {
+    console.error("Error fetching evaluation:", error);
+    return null;
+  }
 }
 
 function updateScoreText(evaluation) {
-    if (isNaN(evaluation) || evaluation === null || evaluation === undefined) {
-        $('#scoreText').text('Evaluation: Not available');
-        return;
-    }
+  if (isNaN(evaluation) || evaluation === null || evaluation === undefined) {
+    $("#scoreText").text("Evaluation: Not available");
+    return;
+  }
 
-    let scoreDisplay = '';
-    if (evaluation === 10000) {
-        scoreDisplay = 'Mate in N (AI is winning)';
-    } else if (evaluation === -10000) {
-        scoreDisplay = 'Mate in N (You are winning)';
+  let scoreDisplay = "";
+  if (evaluation === 10000) {
+    scoreDisplay = "Mate in N (AI is winning)";
+  } else if (evaluation === -10000) {
+    scoreDisplay = "Mate in N (You are winning)";
+  } else {
+    const scoreInPawns = (evaluation / 100).toFixed(2);
+    if (boardOrientation === "white") {
+      scoreDisplay = `Evaluation: ${scoreInPawns} pawns`;
     } else {
-        const scoreInPawns = (evaluation / 100).toFixed(2);
-        if (boardOrientation === 'white') {
-            scoreDisplay = `Evaluation: ${scoreInPawns} pawns`;
-        }
-        else {
-            scoreDisplay = `Evaluation: ${-scoreInPawns} pawns`;
-        }
+      scoreDisplay = `Evaluation: ${-scoreInPawns} pawns`;
     }
+  }
 
-    $('#scoreText').text(scoreDisplay);
+  $("#scoreText").text(scoreDisplay);
 }
 
 async function playAIMove() {
-    const fenBefore = game.fen();
-    const thisRequestId = ++aiMoveRequestId; // Increment and capture current request ID
-    const aiResponse = await getAIMove(fenBefore);
+  const fenBefore = game.fen();
+  const thisRequestId = ++aiMoveRequestId; // Increment and capture current request ID
+  const aiResponse = await getAIMove(fenBefore);
 
-    // If another move has been made since this request started, ignore this response
-    if (thisRequestId !== aiMoveRequestId) {
-        console.log("Discarding stale AI move");
-        return;
-    }
+  // If another move has been made since this request started, ignore this response
+  if (thisRequestId !== aiMoveRequestId) {
+    console.log("Discarding stale AI move");
+    return;
+  }
 
-    if (aiResponse && aiResponse.move) {
-        const aiMove = aiResponse.move;
+  if (aiResponse && aiResponse.move) {
+    const aiMove = aiResponse.move;
 
-        setTimeout(() => {
-            // Again, double-check before applying
-            if (thisRequestId !== aiMoveRequestId) return;
+    setTimeout(async () => {
+      // Again, double-check before applying
+      if (thisRequestId !== aiMoveRequestId) return;
 
-            const moveResult = game.move({
-                from: aiMove.slice(0, 2),
-                to: aiMove.slice(2, 4),
-                promotion: 'q'
-            });
+      const moveResult = game.move({
+        from: aiMove.slice(0, 2),
+        to: aiMove.slice(2, 4),
+        promotion: "q",
+      });
 
-            if (moveResult === null) {
-                console.error("Invalid AI move:", aiMove);
-            } else {
-                board1.position(game.fen());
+      if (moveResult === null) {
+        console.error("Invalid AI move:", aiMove);
+      } else {
+        board1.position(game.fen());
 
-                moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
-                moveHistory.push(game.fen());
-                currentMoveIndex++;
-                updateNavigationButtons();
+        moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
+        moveHistory.push(game.fen());
+        currentMoveIndex++;
+        updateNavigationButtons();
 
-                // Check for checkmate
-                if (game.in_checkmate()) {
-                    setTimeout(() => {
-                        showCheckmateOptions(); // Show the checkmate options modal
-                    }, 500); // Delay to ensure the move is visually updated first
-                }
-            }
-        }, 1000);
-    } else {
-        console.error("No AI move returned.");
-    }
+        // Record the AI move
+        const userData = await getUserData();
+        if (userData && userData.current_game_id) {
+          await recordAIMove(
+            userData.current_game_id,
+            aiMove,
+            game.fen(),
+            aiResponse.evaluation
+          );
+        }
+
+        // Check for checkmate
+        if (game.in_checkmate()) {
+          setTimeout(() => {
+            showCheckmateOptions(); // Show the checkmate options modal
+          }, 500); // Delay to ensure the move is visually updated first
+        }
+      }
+    }, 1000);
+  } else {
+    console.error("No AI move returned.");
+  }
 }
 
 function getGameResult() {
-    if (game.isCheckmate()) {
-        return game.turn() === 'w' ? '0-1' : '1-0';
-    }
-    if (game.isDraw()) {
-        return '1/2-1/2';
-    }
-    return '*';
+  if (game.isCheckmate()) {
+    return game.turn() === "w" ? "0-1" : "1-0";
+  }
+  if (game.isDraw()) {
+    return "1/2-1/2";
+  }
+  return "*";
 }
 
-function showGameResult(result) {
-    let message = "";
-    switch(result) {
-        case '1-0': message = "White wins!"; break;
-        case '0-1': message = "Black wins!"; break;
-        case '1/2-1/2': message = "Draw!"; break;
-        default: message = "Game ended"; break;
+async function showGameResult(result) {
+  let message = "";
+  try {
+    // Display a saving indicator
+    console.log("Attempting to save game with result:", result);
+
+    // Call saveGame and await the response
+    const saveResponse = await saveGame(
+      game.pgn(),
+      boardOrientation === "white" ? "Player" : "AI",
+      boardOrientation === "white" ? "AI" : "Player",
+      result
+    );
+
+    if (saveResponse.game_id) {
+      // Trigger analysis
+      const analysisResponse = await fetch(
+        `/analyze_game/${saveResponse.game_id}`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (!analysisResponse.ok) {
+        console.error("Analysis failed to start");
+      }
     }
-    
+
+    // Check if there was an error in the response
+    if (saveResponse.error) {
+      console.error("Save game returned an error:", saveResponse.error);
+      throw new Error(saveResponse.error);
+    }
+
+    // Log success information
+    console.log("Game saved successfully with ID:", saveResponse.game_id);
+
+    // Set success message
+    switch (result) {
+      case "1-0":
+        message = "White wins! Game saved successfully.";
+        break;
+      case "0-1":
+        message = "Black wins! Game saved successfully.";
+        break;
+      case "1/2-1/2":
+        message = "Draw! Game saved successfully.";
+        break;
+      default:
+        message = "Game ended and was saved successfully.";
+        break;
+    }
+
+    // Show message to user
     alert(message);
+
+    $("#viewStatsButton")(() => {
+      window.location.href = "/stats";
+    });
+  } catch (error) {
+    // Handle error
+    console.error("Error in showGameResult:", error);
+    alert(
+      `Game ended (${result}), but there was an error saving: ${error.message}`
+    );
+  }
 }
 
 async function evaluatePlayerMove(fenBefore, move) {
-    try {
-        const response = await fetch('/evaluate_move', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fen_before: fenBefore, move: move })
-        });
+  try {
+    const response = await fetch("/evaluate_move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fen_before: fenBefore, move: move }),
+    });
 
-        const data = await response.json();
-        if (data.error) {
-            console.error("Error evaluating move:", data.error);
-            return;
-        }
-
-        // Display the score and feedback
-        const { cpl, score, feedback } = data;
-        $('#scoreText').html(`<span class="black-text"><b>Score:</b> ${score} – ${feedback}</span>`);
-    } catch (error) {
-        console.error("Error fetching evaluation:", error);
+    const data = await response.json();
+    if (data.error) {
+      console.error("Error evaluating move:", data.error);
+      return;
     }
+
+    // Display the score and feedback
+    const { cpl, score, feedback } = data;
+    $("#scoreText").html(
+      `<span class="black-text"><b>Score:</b> ${score} – ${feedback}</span>`
+    );
+  } catch (error) {
+    console.error("Error fetching evaluation:", error);
+  }
 }
 
-function onSquareClick(square) {
-    if (moveValidationEnabled) {
-        const moves = game.moves({ square, verbose: true });
+async function onSquareClick(square) {
+  if (moveValidationEnabled) {
+    const moves = game.moves({ square, verbose: true });
 
-        if (!selectedSquare) {
-            if (moves.length === 0) return;
-            selectedSquare = square;
-            highlightSquares(square, moves.map(m => m.to));
-        } else {
-            const fenBefore = game.fen(); // Save FEN before the move
-            const pieceAtFrom = game.get(selectedSquare);
-            const isPromotionSquare = (square[1] === '8' || square[1] === '1');
-            const isPawnPromotion = pieceAtFrom && pieceAtFrom.type === 'p' && isPromotionSquare;
+    if (!selectedSquare) {
+      if (moves.length === 0) return;
+      selectedSquare = square;
+      highlightSquares(
+        square,
+        moves.map((m) => m.to)
+      );
+    } else {
+      const fenBefore = game.fen(); // Save FEN before the move
+      const pieceAtFrom = game.get(selectedSquare);
+      const isPromotionSquare = square[1] === "8" || square[1] === "1";
+      const isPawnPromotion =
+        pieceAtFrom && pieceAtFrom.type === "p" && isPromotionSquare;
 
-            if (isPawnPromotion) {
-                // Validate the move
-                const dryRunMove = game.move({
-                    from: selectedSquare,
-                    to: square,
-                    promotion: 'q' // Temporary promotion for validation
-                });
+      if (isPawnPromotion) {
+        // Validate the move
+        const dryRunMove = game.move({
+          from: selectedSquare,
+          to: square,
+          promotion: "q", // Temporary promotion for validation
+        });
 
-                if (dryRunMove === null) {
-                    // Invalid move, do nothing
-                    selectedSquare = null;
-                    removeHighlights();
-                    return;
-                }
+        if (dryRunMove === null) {
+          // Invalid move, do nothing
+          selectedSquare = null;
+          removeHighlights();
+          return;
+        }
 
-                // Revert the move after validation
-                game.undo();
+        // Revert the move after validation
+        game.undo();
 
-                // Determine the piece color based on the player's orientation
-                const pieceColor = boardOrientation === 'white' ? 'w' : 'b';
+        // Determine the piece color based on the player's orientation
+        const pieceColor = boardOrientation === "white" ? "w" : "b";
 
-                // Update the modal images dynamically
-                $('#promotionQueen').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}Q.png`);
-                $('#promotionRook').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}R.png`);
-                $('#promotionBishop').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}B.png`);
-                $('#promotionKnight').attr('src', `/static/img/chesspieces/wikipedia/${pieceColor}N.png`);
+        // Update the modal images dynamically
+        $("#promotionQueen").attr(
+          "src",
+          `/static/img/chesspieces/wikipedia/${pieceColor}Q.png`
+        );
+        $("#promotionRook").attr(
+          "src",
+          `/static/img/chesspieces/wikipedia/${pieceColor}R.png`
+        );
+        $("#promotionBishop").attr(
+          "src",
+          `/static/img/chesspieces/wikipedia/${pieceColor}B.png`
+        );
+        $("#promotionKnight").attr(
+          "src",
+          `/static/img/chesspieces/wikipedia/${pieceColor}N.png`
+        );
 
-                // Show the promotion modal
-                $('#promotionModal').modal('show');
+        // Show the promotion modal
+        $("#promotionModal").modal("show");
 
-                $('.promotion-piece').off('click').on('click', function () {
-                    const promotionPiece = $(this).data('piece'); // q, r, b, n
+        $(".promotion-piece")
+          .off("click")
+          .on("click", async function () {
+            const promotionPiece = $(this).data("piece"); // q, r, b, n
 
-                    const move = game.move({
-                        from: selectedSquare,
-                        to: square,
-                        promotion: promotionPiece
-                    });
-
-                    if (move === null) {
-                        selectedSquare = null;
-                        removeHighlights();
-                        $('#promotionModal').modal('hide');
-                        return;
-                    }
-
-                    $('#moveText').html(`<span class="black-text">Moved from <b>${move.from}</b> to <b>${move.to}</b></span>`);
-                    board1.position(game.fen());
-                    selectedSquare = null;
-                    removeHighlights();
-
-                    const fenAfter = game.fen();
-                    const uciMove = move.promotion
-                        ? `${move.from}${move.to}${move.promotion}`
-                        : `${move.from}${move.to}`;
-                    evaluatePlayerMove(fenBefore, uciMove);
-
-                    moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
-                    moveHistory.push(game.fen());
-                    currentMoveIndex++;
-                    updateNavigationButtons();
-
-                    playAIMove();
-
-                    $('#promotionModal').modal('hide');
-                });
-
-                return; // Stop here, wait for modal choice
-            }
-
-            // If no promotion, normal move execution
             const move = game.move({
-                from: selectedSquare,
-                to: square
+              from: selectedSquare,
+              to: square,
+              promotion: promotionPiece,
             });
 
             if (move === null) {
-                selectedSquare = null;
-                removeHighlights();
-                return;
+              selectedSquare = null;
+              removeHighlights();
+              $("#promotionModal").modal("hide");
+              return;
             }
 
-            $('#moveText').html(`<span class="black-text">Moved from <b>${move.from}</b> to <b>${move.to}</b></span>`);
+            $("#moveText").html(
+              `<span class="black-text">Moved from <b>${move.from}</b> to <b>${move.to}</b></span>`
+            );
             board1.position(game.fen());
             selectedSquare = null;
             removeHighlights();
 
-            const fenAfter = game.fen();
+            const gameState = game.fen();
             const uciMove = move.promotion
-                ? `${move.from}${move.to}${move.promotion}`
-                : `${move.from}${move.to}`;
+              ? `${move.from}${move.to}${move.promotion}`
+              : `${move.from}${move.to}`;
             evaluatePlayerMove(fenBefore, uciMove);
 
+            // Record the player move
+            const userData = await getUserData();
+            if (userData && userData.current_game_id) {
+              await recordMove(userData.current_game_id, gameState);
+            }
+
             moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
-            moveHistory.push(game.fen());
+            moveHistory.push(gameState);
             currentMoveIndex++;
             updateNavigationButtons();
 
-            // Check for checkmate
-            if (game.in_checkmate()) {
-                setTimeout(() => {
-                    showCheckmateOptions(); // Show the checkmate options modal
-                }, 500); // Delay to ensure the move is visually updated first
-            } else {
-                // Trigger AI move
-                playAIMove();
-            }
-        }
-    } else {
-        if (!selectedSquare) {
-            selectedSquare = square;
-            highlightSelectedSquare(square);
-        } else {
-            const piece = game.get(selectedSquare);
-            if (piece) {
-                game.remove(selectedSquare);
-                game.put(piece, square);
-            }
-            board1.position(game.fen());
-            selectedSquare = null;
-            removeHighlights();
-        }
+            playAIMove();
+
+            $("#promotionModal").modal("hide");
+          });
+
+        return; // Stop here, wait for modal choice
+      }
+
+      // If no promotion, normal move execution
+      const move = game.move({
+        from: selectedSquare,
+        to: square,
+      });
+
+      if (move === null) {
+        selectedSquare = null;
+        removeHighlights();
+        return;
+      }
+
+      $("#moveText").html(
+        `<span class="black-text">Moved from <b>${move.from}</b> to <b>${move.to}</b></span>`
+      );
+      board1.position(game.fen());
+      selectedSquare = null;
+      removeHighlights();
+
+      const gameState = game.fen();
+      const uciMove = move.promotion
+        ? `${move.from}${move.to}${move.promotion}`
+        : `${move.from}${move.to}`;
+      evaluatePlayerMove(fenBefore, uciMove);
+
+      // Record the player move
+      const userData = await getUserData();
+      if (userData && userData.current_game_id) {
+        await recordMove(userData.current_game_id, gameState);
+      }
+
+      moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
+      moveHistory.push(game.fen());
+      currentMoveIndex++;
+      updateNavigationButtons();
+
+      // Check for checkmate
+      if (game.in_checkmate()) {
+        setTimeout(() => {
+          showCheckmateOptions(); // Show the checkmate options modal
+        }, 500); // Delay to ensure the move is visually updated first
+      } else {
+        // Trigger AI move
+        playAIMove();
+      }
     }
+  } else {
+    if (!selectedSquare) {
+      selectedSquare = square;
+      highlightSelectedSquare(square);
+    } else {
+      const piece = game.get(selectedSquare);
+      if (piece) {
+        game.remove(selectedSquare);
+        game.put(piece, square);
+      }
+      board1.position(game.fen());
+      selectedSquare = null;
+      removeHighlights();
+    }
+  }
 }
 
 function highlightSelectedSquare(square) {
-    removeHighlights();
-    $(`#board1 .square-${square}`).addClass('highlight1-32417');
+  removeHighlights();
+  $(`#board1 .square-${square}`).addClass("highlight1-32417");
 }
 
 function highlightSquares(from, toSquares) {
-    removeHighlights();
-    $(`#board1 .square-${from}`).addClass('highlight1-32417');
+  removeHighlights();
+  $(`#board1 .square-${from}`).addClass("highlight1-32417");
 
-    toSquares.forEach(square => {
-        const targetSquare = $(`#board1 .square-${square}`);
-        const piece = game.get(square);
+  toSquares.forEach((square) => {
+    const targetSquare = $(`#board1 .square-${square}`);
+    const piece = game.get(square);
 
-        if (piece) {
-            targetSquare.append('<div class="valid-move-circle valid-move-circle-capture"></div>');
-        } else {
-            targetSquare.append('<div class="valid-move-circle"></div>');
-        }
-    });
+    if (piece) {
+      targetSquare.append(
+        '<div class="valid-move-circle valid-move-circle-capture"></div>'
+      );
+    } else {
+      targetSquare.append('<div class="valid-move-circle"></div>');
+    }
+  });
 }
 
 function removeHighlights() {
-    $('#board1 .square-55d63').removeClass('highlight1-32417');
-    $('#board1 .valid-move-circle').remove();
+  $("#board1 .square-55d63").removeClass("highlight1-32417");
+  $("#board1 .valid-move-circle").remove();
 }
 
 // Top control buttons
-$('#playWhite').click(() => initializeBoard('white'));
-$('#playBlack').click(() => initializeBoard('black'));
+$("#playWhite").click(() => initializeBoard("white"));
+$("#playBlack").click(() => initializeBoard("black"));
 
-$('#reset').click(() => {
-    game.reset();
-    board1.start();
-    selectedSquare = null;
-    removeHighlights();
-    moveValidationEnabled = false;
+$("#reset").click(() => {
+  game.reset();
+  board1.start();
+  selectedSquare = null;
+  removeHighlights();
+  moveValidationEnabled = false;
 
-    // Reset move history
-    moveHistory = [game.fen()];
-    currentMoveIndex = 0;
+  // Reset move history
+  moveHistory = [game.fen()];
+  currentMoveIndex = 0;
 });
 
 // Main game flow
 
 function setupPlayButton() {
-    $('.container.text-center').html(`
-        <button id="playGame" class="btn btn-success fs-4">Play Game</button>
-        <button class="btn btn-primary fs-4 m-4" id="backButton">Back</button>
+  $(".container.text-center").html(`
+        <button id="playGame" class="btn btn-success btn-lg fs-3">Play Game</button>
+        <br>
+        <button class="btn btn-primary fs-3 m-4" id="backButton">Back</button>
     `);
 
-    $('#playGame').click(() => {
-        playPressed = true;
-        $('.column button').fadeOut();
-        $('#playGame, #backButton').fadeOut(() => {
-            setupDifficultyButtons();
-        });
-
-        // Hide sidebar and menu button when "Play Game" is clicked
-        const sidebar = document.getElementById("mySidebar");
-        const menuButton = document.querySelector(".openbtn");
-      
-        sidebar.classList.add("closed");
-        menuButton.classList.add("hidden");
+  $("#playGame").click(() => {
+    playPressed = true;
+    $(".column button").fadeOut();
+    $("#playGame, #backButton").fadeOut(() => {
+      setupDifficultyButtons();
     });
 
-    $('.column button').fadeIn();
+    // Hide sidebar and menu button when "Play Game" is clicked
+    const sidebar = document.getElementById("mySidebar");
+    const menuButton = document.querySelector(".openbtn");
 
-    $('#backButton').click(() => {
-        window.history.back();
-    });
+    sidebar.classList.add("closed");
+    menuButton.classList.add("hidden");
+  });
+
+  $(".column button").fadeIn();
+
+  $("#backButton").click(() => {
+    window.history.back();
+  });
 }
 
 function setupDifficultyButtons() {
-    $('.container.text-center').html(`
+  $(".container.text-center").html(`
         <div id="difficultyButtons">
             <button class="btn btn-success fs-5 m-1" onclick="startGame('easy')">Easy</button>
             <button class="btn btn-warning fs-5 m-1" onclick="startGame('medium')">Medium</button>
@@ -431,30 +582,44 @@ function setupDifficultyButtons() {
         </div>
     `);
 
-    $('#backButton').click(() => {
-        $('#difficultyButtons').fadeOut(() => {
-            $('#board1').parent().animate({ marginTop: '0' }, 500, () => {
-                setupPlayButton();
-            });
-        // Show sidebar and menu button when "Back" is clicked
-        const sidebar = document.getElementById("mySidebar");
-        const menuButton = document.querySelector(".openbtn");
-
-        sidebar.classList.remove("closed");
-        menuButton.classList.remove("hidden");
+  $("#backButton").click(() => {
+    $("#difficultyButtons").fadeOut(() => {
+      $("#board1")
+        .parent()
+        .animate({ marginTop: "0" }, 500, () => {
+          setupPlayButton();
         });
+      // Show sidebar and menu button when "Back" is clicked
+      const sidebar = document.getElementById("mySidebar");
+      const menuButton = document.querySelector(".openbtn");
+
+      sidebar.classList.remove("closed");
+      menuButton.classList.remove("hidden");
     });
+  });
 }
 
 // Call updateNavigationButtons when the game starts
-function startGame(difficulty) {
-    selectedDifficulty = difficulty; // Store the selected difficulty
-    moveValidationEnabled = true;
-    console.log(`Game started with difficulty: ${difficulty}`);
+async function startGame(difficulty) {
+  selectedDifficulty = difficulty; // Store the selected difficulty
+  moveValidationEnabled = true;
+  console.log(`Game started with difficulty: ${difficulty}`);
 
-    $('#difficultyButtons').fadeOut(() => {
-        // Add the Resign button after difficulty buttons disappear
-        $('.container.text-center').html(`
+  // Save the game at the start
+  const saveResponse = await saveGame(
+    game.pgn(),
+    boardOrientation === "white" ? "Player" : "AI",
+    boardOrientation === "white" ? "AI" : "Player",
+    "*" // Game in progress
+  );
+
+  if (saveResponse.error) {
+    console.error("Failed to save initial game state:", saveResponse.error);
+  }
+
+  $("#difficultyButtons").fadeOut(() => {
+    // Add the Resign button after difficulty buttons disappear
+    $(".container.text-center").html(`
             <div id="moveCard" class="card mt-1" style="background-color: white; max-width: 65vh; margin: auto;">
                 <div class="card-body">
                     <p class="card-text fs-5" id="moveText" style="text-align: left; color: black">No moves yet.</p>
@@ -475,176 +640,219 @@ function startGame(difficulty) {
             </button>
         `);
 
-        // Fade in the Resign button
-        $('#resignButton').fadeIn();
+    // Fade in the Resign button
+    $("#resignButton").fadeIn();
 
-        // Initialize button states
-        updateNavigationButtons();
+    // Initialize button states
+    updateNavigationButtons();
 
-        // Add click event to redirect to the stats page
-        $('#resignButton').click(async () => {
-            const result = boardOrientation === 'white' ? '0-1' : '1-0';
-            const confirmation = confirm(`Are you sure you want to resign? This will count as a ${result === '1-0' ? 'win' : 'loss'} for the AI.`);
-            
-            if (confirmation) {
-                await saveGame(
-                    game.pgn(),
-                    boardOrientation === 'white' ? "Player" : "AI",
-                    boardOrientation === 'white' ? "AI" : "Player",
-                    result
-                );
-                window.location.href = '/stats'; // Redirect to the stats page
-            }
-        });
+    // Add click event to redirect to the stats page
+    $("#resignButton").click(async () => {
+      const result = boardOrientation === "white" ? "0-1" : "1-0";
+      const confirmation = confirm(`Are you sure you want to resign?`);
 
-        // If playing as black, let Stockfish (white) make the first move
-        if (boardOrientation === 'black') {
-            console.log("Stockfish (White) will make the first move.");
-            playAIMove(); // Trigger Stockfish's first move
-        }
+      window.location.href = "/stats"; // Redirect to the stats page
     });
+
+    // If playing as black, let Stockfish (white) make the first move
+    if (boardOrientation === "black") {
+      console.log("Stockfish (White) will make the first move.");
+      playAIMove(); // Trigger Stockfish's first move
+    }
+  });
 }
 
 async function saveGame(pgn, white, black, result) {
-    try {
-        console.log("Attempting to save game:", { pgn, white, black, result });
-        
-        const response = await fetch('/save_game', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                pgn: pgn,
-                white: white || "Player",  // Default values
-                black: black || "AI",
-                result: result || "*"      // '*' means unfinished
-            })
-        });
+  try {
+    // Get user data from localStorage or API
+    const userData = await getUserData();
 
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || "Failed to save game");
-        }
-
-        console.log("Game saved successfully:", data);
-        return data;
-    } catch (error) {
-        console.error("Error saving game:", error);
-        // Consider showing an error message to the user
-        return { error: error.message };
+    // Check if we have valid user data
+    if (!userData) {
+      console.error("No user data available - cannot save game");
+      return { error: "User not authenticated" };
     }
+
+    // Extract user ID - handle both user_id and id properties
+    const userId = userData.user_id || userData.id;
+    if (!userId) {
+      console.error("User ID not found in user data");
+      return { error: "Invalid user data" };
+    }
+
+    // Validate required fields before sending
+    if (!pgn) {
+      console.error("PGN is required but missing");
+      return { error: "Missing PGN data" };
+    }
+
+    // Ensure white and black player identifiers are set
+    const whiteName = white || "Player";
+    const blackName = black || "AI";
+
+    // Ensure result is valid
+    const validResult = result || "*";
+
+    console.log("Saving game with data:", {
+      pgn: pgn,
+      white: whiteName,
+      black: blackName,
+      result: validResult,
+      user_id: userId,
+    });
+
+    const response = await fetch("/save_game", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        pgn: pgn,
+        white: whiteName,
+        black: blackName,
+        result: validResult,
+        user_id: userId,
+        analyzed: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to save game");
+    }
+
+    const data = await response.json();
+    console.log("Game saved successfully:", data);
+
+    // Store the game ID in localStorage for move recording
+    if (data.game_id) {
+      const updatedUserData = { ...userData, current_game_id: data.game_id };
+      localStorage.setItem("user", JSON.stringify(updatedUserData));
+
+      // Process any queued moves if they exist
+      if (moveRecordingQueue.length > 0) {
+        console.log("Processing queued moves...");
+        for (const moveData of moveRecordingQueue) {
+          await recordMove(data.game_id, moveData);
+        }
+        moveRecordingQueue = []; // Clear the queue after processing
+      }
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error saving game:", error);
+    return { error: error.message };
+  }
 }
 
 // Helper function to update the state of the Previous and Next buttons
 function updateNavigationButtons() {
-    if (currentMoveIndex <= 0) {
-        $('#prevMove').prop('disabled', true).removeClass('btn-primary').addClass('btn-secondary'); // Disable and gray out Previous button
-    } else {
-        $('#prevMove').prop('disabled', false).removeClass('btn-secondary').addClass('btn-primary'); // Enable and restore Previous button
-    }
+  if (currentMoveIndex <= 0) {
+    $("#prevMove")
+      .prop("disabled", true)
+      .removeClass("btn-primary")
+      .addClass("btn-secondary"); // Disable and gray out Previous button
+  } else {
+    $("#prevMove")
+      .prop("disabled", false)
+      .removeClass("btn-secondary")
+      .addClass("btn-primary"); // Enable and restore Previous button
+  }
 
-    if (currentMoveIndex >= moveHistory.length - 1) {
-        $('#nextMove').prop('disabled', true).removeClass('btn-primary').addClass('btn-secondary'); // Disable and gray out Next button
-    } else {
-        $('#nextMove').prop('disabled', false).removeClass('btn-secondary').addClass('btn-primary'); // Enable and restore Next button
-    }
+  if (currentMoveIndex >= moveHistory.length - 1) {
+    $("#nextMove")
+      .prop("disabled", true)
+      .removeClass("btn-primary")
+      .addClass("btn-secondary"); // Disable and gray out Next button
+  } else {
+    $("#nextMove")
+      .prop("disabled", false)
+      .removeClass("btn-secondary")
+      .addClass("btn-primary"); // Enable and restore Next button
+  }
 }
 
 // Update the button states after every move
 function updateMoveHistory(fen) {
-    moveHistory = moveHistory.slice(0, currentMoveIndex + 1); // Trim forward history
-    moveHistory.push(fen); // Add the new FEN
-    currentMoveIndex = moveHistory.length - 1; // Update the current index
-    updateNavigationButtons(); // Update button states
+  moveHistory = moveHistory.slice(0, currentMoveIndex + 1); // Trim forward history
+  moveHistory.push(fen); // Add the new FEN
+  currentMoveIndex = moveHistory.length - 1; // Update the current index
+  updateNavigationButtons(); // Update button states
 }
 
 // Modify the Previous button click handler
-$(document).on('click', '#prevMove', () => {
-    if (currentMoveIndex > 0) {
-        currentMoveIndex--;
-        const fen = moveHistory[currentMoveIndex];
-        game.load(fen);
-        board1.position(fen);
-        console.log(`Moved back to index ${currentMoveIndex}`);
-        updateNavigationButtons();
+$(document).on("click", "#prevMove", () => {
+  if (currentMoveIndex > 0) {
+    currentMoveIndex--;
+    const fen = moveHistory[currentMoveIndex];
+    game.load(fen);
+    board1.position(fen);
+    console.log(`Moved back to index ${currentMoveIndex}`);
+    updateNavigationButtons();
 
-        aiMoveRequestId++; // Invalidate any in-flight AI move
-
-        // --- FIX: If it's AI's turn, trigger AI move ---
-        if (moveValidationEnabled) {
-            const isPlayersTurn = (boardOrientation === 'white' && game.turn() === 'w') ||
-                                  (boardOrientation === 'black' && game.turn() === 'b');
-            if (!isPlayersTurn && !game.game_over()) {
-                playAIMove();
-            }
-        }
-    }
+    aiMoveRequestId++; // Invalidate any in-flight AI move
+  }
 });
 // Modify the Next button click handler
-$(document).on('click', '#nextMove', () => {
-    if (currentMoveIndex < moveHistory.length - 1) {
-        currentMoveIndex++;
-        const fen = moveHistory[currentMoveIndex];
-        game.load(fen);
-        board1.position(fen);
-        console.log(`Moved forward to index ${currentMoveIndex}`);
-        updateNavigationButtons();
+$(document).on("click", "#nextMove", () => {
+  if (currentMoveIndex < moveHistory.length - 1) {
+    currentMoveIndex++;
+    const fen = moveHistory[currentMoveIndex];
+    game.load(fen);
+    board1.position(fen);
+    console.log(`Moved forward to index ${currentMoveIndex}`);
+    updateNavigationButtons();
 
-        aiMoveRequestId++; // Invalidate any in-flight AI move
-
-        // --- FIX: If it's AI's turn, trigger AI move ---
-        if (moveValidationEnabled) {
-            const isPlayersTurn = (boardOrientation === 'white' && game.turn() === 'w') ||
-                                  (boardOrientation === 'black' && game.turn() === 'b');
-            if (!isPlayersTurn && !game.game_over()) {
-                playAIMove();
-            }
-        }
-    }
+    aiMoveRequestId++; // Invalidate any in-flight AI move
+  }
 });
 
 // Map left and right arrow keys to Previous and Next actions
 $(document).keydown((e) => {
-    if (e.key === 'ArrowLeft') {
-        $('#prevMove').click(); // Trigger Previous button click
-    } else if (e.key === 'ArrowRight') {
-        $('#nextMove').click(); // Trigger Next button click
-    }
+  if (e.key === "ArrowLeft") {
+    $("#prevMove").click(); // Trigger Previous button click
+  } else if (e.key === "ArrowRight") {
+    $("#nextMove").click(); // Trigger Next button click
+  }
 });
 
 // Detect clicks outside the board
-$(document).on('click', function (e) {
-    const isInsideBoard = $(e.target).closest('#board1').length > 0;
+$(document).on("click", function (e) {
+  const isInsideBoard = $(e.target).closest("#board1").length > 0;
 
-    if (!isInsideBoard && !moveValidationEnabled && selectedSquare && !playPressed) {
-        // If clicked outside the board and not in move validation mode, remove the piece
-        const piece = game.get(selectedSquare);
-        if (piece) {
-            game.remove(selectedSquare);
-            board1.position(game.fen());
-        }
-        selectedSquare = null;
-        removeHighlights();
+  if (
+    !isInsideBoard &&
+    !moveValidationEnabled &&
+    selectedSquare &&
+    !playPressed
+  ) {
+    // If clicked outside the board and not in move validation mode, remove the piece
+    const piece = game.get(selectedSquare);
+    if (piece) {
+      game.remove(selectedSquare);
+      board1.position(game.fen());
     }
+    selectedSquare = null;
+    removeHighlights();
+  }
 });
 
 // Initialize on page load
-initializeBoard('white');
+initializeBoard("white");
 setupPlayButton();
 
 function showCheckmateOptions() {
-    // Determine the winner
-    const winner = game.turn() === 'w' ? 'Black' : 'White';
+  // Determine the winner
+  const winner = game.turn() === "w" ? "Black" : "White";
 
-    $('#resignButton').replaceWith(`
+  $("#resignButton").replaceWith(`
         <button id="newGameButton" class="btn btn-success mt-3 fs-5">New Game</button>
         <button id="viewStatsButton" class="btn btn-secondary mt-3 fs-5">View Stats</button>
     `);
 
-    // Create a modal dialog for checkmate options
-    const modalHtml = `
+  // Create a modal dialog for checkmate options
+  const modalHtml = `
         <div id="checkmateModal" class="modal" tabindex="-1" role="dialog" style="display: block; background: rgba(0, 0, 0, 0.5);">
             <div class="modal-dialog" role="document">
                 <div class="modal-content">
@@ -653,7 +861,7 @@ function showCheckmateOptions() {
                     </div>
                     <div class="modal-footer d-flex justify-content-center gap-2">
                         <button id="reviewGameButton" class="btn btn-primary">Review Game</button>
-                        <button id="playAgainButton" class="btn btn-success">New Game</button>
+                        <button id="newGameButton" class="btn btn-success">New Game</button>
                         <button id="viewStatsButton" class="btn btn-secondary">View Stats</button>
                     </div>
                 </div>
@@ -661,29 +869,123 @@ function showCheckmateOptions() {
         </div>
     `;
 
-    // Append the modal to the body
-    $('body').append(modalHtml);
+  // Append the modal to the body
+  $("body").append(modalHtml);
 
-    // Add event listeners for the buttons
-    $('#reviewGameButton').click(() => {
-        closeCheckmateModal(); // Close the modal
-        // Do nothing, just leave the board as it is
-    });
+  // Add event listeners for the buttons
+  $("#reviewGameButton").click(() => {
+    closeCheckmateModal(); // Close the modal
+    // Do nothing, just leave the board as it is
+  });
 
-    $('#playAgainButton').click(() => {
-        location.reload(); // Refresh the page to start a new game
-    }
-    );
+  $("#newGameButton").click(() => {
+    location.reload(); // Refresh the page to start a new game
+  });
 
-    $('#newGameButton').click(() => {
-        location.reload(); // Refresh the page to start a new game
-    });
-
-    $('#viewStatsButton').click(() => {
-        window.location.href = '/stats'; // Redirect to stats page
-    });
+  $("#viewStatsButton").click(() => {
+    window.location.href = "/stats"; // Redirect to stats page
+  });
 }
 
 function closeCheckmateModal() {
-    $('#checkmateModal').remove(); // Remove the modal from the DOM
+  $("#checkmateModal").remove(); // Remove the modal from the DOM
+}
+
+async function recordMove(gameId, gameState) {
+  // If no gameId is provided, queue the move for later and show a warning
+  if (!gameId) {
+    console.warn("No game ID available - move recording queued for later");
+    moveRecordingQueue.push(gameState);
+    showRecordingStatus("warning");
+    return null;
+  }
+
+  try {
+    showRecordingStatus("pending");
+
+    const response = await fetch("/record_move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        game_id: gameId,
+        game_state: gameState,
+        move_number: game.history().length,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to record move");
+    }
+
+    const data = await response.json();
+    if (data.error) {
+      console.error("Error recording move:", data.error);
+      return null;
+    }
+
+    showRecordingStatus("success");
+    return data;
+  } catch (error) {
+    console.error("Error recording move:", error);
+    showRecordingStatus("error");
+
+    moveRecordingQueue.push({ ...moveData, gameId });
+
+    return null;
+  }
+}
+
+async function recordAIMove(gameId, move, fenAfter, evaluation) {
+  // Convert the AI move to SAN format
+  const tempGame = new Chess(fenAfter);
+  tempGame.undo(); // Go back to before the move
+  const sanMove = tempGame.move({
+    from: move.slice(0, 2),
+    to: move.slice(2, 4),
+    promotion: move.length > 4 ? move[4] : undefined,
+  }).san;
+
+  const moveData = {
+    move_number: tempGame.history().length,
+    san: sanMove,
+    uci: move,
+    fen: fenAfter,
+    score: evaluation,
+  };
+
+  return await recordMove(gameId, moveData);
+}
+
+function showRecordingStatus(status) {
+  const moveCard = $("#moveCard");
+  const statusText = $("#recordingStatus");
+
+  // Create status element if it doesn't exist
+  if (statusText.length === 0) {
+    moveCard
+      .find(".card-body")
+      .append('<p id="recordingStatus" class="card-text fs-6"></p>');
+  }
+
+  // Update status message and styling
+  const statusElement = $("#recordingStatus");
+  switch (status) {
+    case "pending":
+      statusElement.text("Recording move...").css("color", "#f0ad4e");
+      break;
+    case "success":
+      statusElement.text("Move recorded").css("color", "#5cb85c");
+      // Clear success message after a short delay
+      setTimeout(() => statusElement.text(""), 2000);
+      break;
+    case "error":
+      statusElement.text("Failed to record move").css("color", "#d9534f");
+      break;
+    case "warning":
+      statusElement.text("Move queued for recording").css("color", "#f0ad4e");
+      break;
+    default:
+      statusElement.text("");
+  }
 }
