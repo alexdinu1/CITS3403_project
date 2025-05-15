@@ -1,9 +1,11 @@
 from flask import Blueprint, request, jsonify
-from models import db, Game, PlayerStats, GameAnalysis
+from models import db, Game, PlayerStats, GameAnalysis, Move
 import chess
 import chess.engine
+import chess.pgn
 import platform
 from flask import current_app
+from io import StringIO
 
 chess_bp = Blueprint('chess', __name__)
 
@@ -210,6 +212,7 @@ def save_game():
     white = data.get('white')
     black = data.get('black')
     result = data.get('result')
+    user_id = data.get('user_id')
 
     if not pgn or not white or not black or not result:
         return jsonify({'error': 'Missing required fields'}), 400
@@ -220,10 +223,42 @@ def save_game():
             white_player=white,
             black_player=black,
             result=result,
+            user_id=user_id,
             date_played=None
         )
         db.session.add(game)
         db.session.commit()
+
+        pgn = StringIO(data.get('pgn'))
+        chess_game = chess.pgn.read_game(pgn)
+
+        if not chess_game:
+            return jsonify({'error': 'Invalid PGN'}), 400
+        
+        board = chess.Board()
+        move_number = 1
+
+        for move in chess_game.mainline_moves():
+            try:
+                san = board.san(move)
+                board.push(move)
+                move_entry = Move(
+                    game_id=game.id,
+                    move_number=move_number,
+                    san=san,
+                    uci=move.uci(),
+                    fen=board.fen(),
+                    score=None
+                )
+                db.session.add(move_entry)
+                move_number += 1
+            except Exception as e:
+                return jsonify({'error': f'Invalid move in PGN: {move}'}), 400
+
+        db.session.commit()
+
+        update_stats(user_id, result, game.id, white)
+
         return jsonify({'status': 'success', 'game_id': game.id})
     except Exception as e:
         db.session.rollback()
@@ -269,3 +304,34 @@ def get_game_analysis(game_id):
         'score': a.score,
         'comment': a.comment
     } for a in analysis])
+
+def update_stats(user_id, result, game_id, white):
+    player_stats = PlayerStats.query.filter_by(user_id=user_id).first()
+    if not player_stats:
+        player_stats = PlayerStats(user_id=user_id, wins=0, losses=0, draws=0, rating=1000, highest_rating=1000, last_game_id=None)
+        db.session.add(player_stats)
+
+    if white == 'Player':
+        if result == '1-0':
+            player_stats.wins += 1
+        elif result == '0-1':
+            player_stats.losses += 1
+        else:
+            player_stats.draws += 1
+    elif white == 'AI':
+        if result == '1-0':
+            player_stats.losses += 1
+        elif result == '0-1':
+            player_stats.wins += 1
+        else:
+            player_stats.draws += 1
+    else:
+        raise ValueError(f"User with ID {user_id} did not participate in game {game_id}.")
+    
+    player_stats.last_game_id = game_id
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        raise ValueError(f"Failed to update player stats: {e}")

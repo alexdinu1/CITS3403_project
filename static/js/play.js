@@ -507,6 +507,8 @@ function startGame(difficulty) {
 
 async function saveGame(pgn, white, black, result) {
     try {
+        const user = JSON.parse(localStorage.getItem('user'))
+        const userid = user ? user.user_id : null
         console.log("Attempting to save game:", { pgn, white, black, result });
         
         const response = await fetch('/save_game', {
@@ -518,7 +520,8 @@ async function saveGame(pgn, white, black, result) {
                 pgn: pgn,
                 white: white || "Player",  // Default values
                 black: black || "AI",
-                result: result || "*"      // '*' means unfinished
+                result: result || "*",      // '*' means unfinished
+                user_id: userid
             })
         });
 

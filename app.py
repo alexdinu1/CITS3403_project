@@ -48,6 +48,13 @@ def init_db():
         db.create_all()
     print('Initialized the database.')
 
+@app.cli.command('clear-db')
+def clear_db():
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+    print('Cleared all data fromt the database.')
+
 # Template routes
 @app.route('/')
 def index():
