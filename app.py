@@ -12,6 +12,8 @@ from routes.auth import auth_bp
 from routes.chess import chess_bp
 from routes.stats import stats_bp
 from routes.friends import friends_bp
+from routes.analysis import analysis_bp
+from routes.move import move_bp
 
 app = Flask(__name__, static_folder='static')
 
@@ -48,6 +50,8 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(chess_bp)
 app.register_blueprint(stats_bp)
 app.register_blueprint(friends_bp)
+app.register_blueprint(analysis_bp)
+app.register_blueprint(move_bp)
 
 # CLI command to initialize the database
 @app.cli.command('init-db')

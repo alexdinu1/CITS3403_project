@@ -9,6 +9,8 @@ let aiMoveRequestId = 0;
 
 let moveHistory = []; // Track the history of FEN positions
 let currentMoveIndex = 0; // Track the current position in the history
+let moveRecordingQueue = [];
+let isProcessingQueue = [];
 
 // Initialize board with custom click-to-move interaction
 function initializeBoard(orientation) {
@@ -46,6 +48,7 @@ async function getUserData() {
             const userData = JSON.parse(storedUserData);
             if (userData && (userData.user_id || userData.id)) {
                 // If we have valid user data in localStorage, use it
+                console.log(userData)
                 return userData;
             }
         }
@@ -168,7 +171,7 @@ async function playAIMove() {
     if (aiResponse && aiResponse.move) {
         const aiMove = aiResponse.move;
 
-        setTimeout(() => {
+        setTimeout(async() => {
             // Again, double-check before applying
             if (thisRequestId !== aiMoveRequestId) return;
 
@@ -187,6 +190,17 @@ async function playAIMove() {
                 moveHistory.push(game.fen());
                 currentMoveIndex++;
                 updateNavigationButtons();
+
+                // Record the AI move
+                const userData = await getUserData();
+                if (userData && userData.current_game_id) {
+                    await recordAIMove(
+                        userData.current_game_id,
+                        aiMove,
+                        game.fen(),
+                        aiResponse.evaluation
+                    );
+                }
 
                 // Check for checkmate
                 if (game.in_checkmate()) {
@@ -224,6 +238,17 @@ async function showGameResult(result) {
             boardOrientation === 'white' ? "AI" : "Player",
             result
         );
+
+        if (saveResponse.game_id) {
+            // Trigger analysis
+            const analysisResponse = await fetch(`/analyze_game/${saveResponse.game_id}`, {
+                method: 'POST'
+            });
+            
+            if (!analysisResponse.ok) {
+                console.error("Analysis failed to start");
+            }
+        }
         
         // Check if there was an error in the response
         if (saveResponse.error) {
@@ -278,7 +303,7 @@ async function evaluatePlayerMove(fenBefore, move) {
     }
 }
 
-function onSquareClick(square) {
+async function onSquareClick(square) {
     if (moveValidationEnabled) {
         const moves = game.moves({ square, verbose: true });
 
@@ -322,7 +347,7 @@ function onSquareClick(square) {
                 // Show the promotion modal
                 $('#promotionModal').modal('show');
 
-                $('.promotion-piece').off('click').on('click', function () {
+                $('.promotion-piece').off('click').on('click', async function () {
                     const promotionPiece = $(this).data('piece'); // q, r, b, n
 
                     const move = game.move({
@@ -348,6 +373,12 @@ function onSquareClick(square) {
                         ? `${move.from}${move.to}${move.promotion}`
                         : `${move.from}${move.to}`;
                     evaluatePlayerMove(fenBefore, uciMove);
+
+                    // Record the player move
+                    const userData = await getUserData();
+                    if (userData && userData.current_game_id) {
+                        await recordPlayerMove(userData.current_game_id, move);
+                    }
 
                     moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
                     moveHistory.push(game.fen());
@@ -384,6 +415,12 @@ function onSquareClick(square) {
                 ? `${move.from}${move.to}${move.promotion}`
                 : `${move.from}${move.to}`;
             evaluatePlayerMove(fenBefore, uciMove);
+
+            // Record the player move
+            const userData = await getUserData();
+            if (userData && userData.current_game_id) {
+                await recordPlayerMove(userData.current_game_id, move);
+            }
 
             moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
             moveHistory.push(game.fen());
@@ -624,7 +661,8 @@ async function saveGame(pgn, white, black, result) {
                 white: whiteName,
                 black: blackName,
                 result: validResult,
-                user_id: userId
+                user_id: userId,
+                analyzed: false
             })
         });
 
@@ -635,6 +673,13 @@ async function saveGame(pgn, white, black, result) {
 
         const data = await response.json();
         console.log("Game saved successfully:", data);
+
+        // Store the game ID in localStorage for move recording
+        if (data.game_id) {
+            const updatedUserData = {...userData, current_game_id: data.game_id};
+            localStorage.setItem('user', JSON.stringify(updatedUserData));
+        }
+
         return data;
     } catch (error) {
         console.error("Error saving game:", error);
@@ -769,4 +814,85 @@ function showCheckmateOptions() {
 
 function closeCheckmateModal() {
     $('#checkmateModal').remove(); // Remove the modal from the DOM
+}
+
+async function recordMove(gameId, moveData) {
+    // If no gameId is provided, queue the move for later and show a warning
+    if (!gameId) {
+        console.warn("No game ID available - move recording queued for later");
+        moveRecordingQueue.push(moveData);
+        showRecordingStatus("warning");
+        return null;
+    }
+
+    try {
+        showRecordingStatus("pending");
+
+        const response = await fetch('/record_move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                game_id: gameId,
+                move_number: moveData.move_number,
+                san: moveData.san,
+                uci: moveData.uci,
+                fen: moveData.fen,
+                score: moveData.score
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to record move");
+        }
+
+        const data = await response.json();
+        if (data.error) {
+            console.error("Error recording move:", data.error);
+            return null;
+        }
+
+        showRecordingStatus("success");
+        return data;
+    } catch (error) {
+        console.error("Error recording move:", error);
+        showRecordingStatus("error")
+
+        moveRecordingQueue.push({...moveData, gameId});
+        
+        return null;
+    }
+}
+
+async function recordPlayerMove(gameId, move) {
+    const moveData = {
+        move_number: move.ply,
+        san: move.san,
+        uci: move.from + move.to + (move.promotion || ''),
+        fen: move.after,
+        score: null // Will be updated after analysis
+    };
+
+    return await recordMove(gameId, moveData);
+}
+
+async function recordAIMove(gameId, move, fenAfter, evaluation) {
+    // Convert the AI move to SAN format
+    const tempGame = new Chess(fenAfter);
+    tempGame.undo(); // Go back to before the move
+    const sanMove = tempGame.move({
+        from: move.slice(0, 2),
+        to: move.slice(2, 4),
+        promotion: move.length > 4 ? move[4] : undefined
+    }).san;
+
+    const moveData = {
+        move_number: tempGame.history().length,
+        san: sanMove,
+        uci: move,
+        fen: fenAfter,
+        score: evaluation
+    };
+
+    return await recordMove(gameId, moveData);
 }
