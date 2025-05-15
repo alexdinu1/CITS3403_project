@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models import db, PlayerStats, GameAnalysis, Game, User, Move
+from models import db, PlayerStats, Game, User, Move
 from sqlalchemy import func
 import math
 import chess

@@ -203,6 +203,7 @@ async function playAIMove() {
           await recordAIMove(
             userData.current_game_id,
             aiMove,
+            fenBefore,
             game.fen(),
             aiResponse.evaluation
           );
@@ -313,10 +314,10 @@ async function evaluatePlayerMove(fenBefore, move) {
       return;
     }
 
-    // Display the score and feedback
-    const { cpl, score, feedback } = data;
+    // Display the score and comment
+    const { score, comment } = data;
     $("#scoreText").html(
-      `<span class="black-text"><b>Score:</b> ${score} – ${feedback}</span>`
+      `<span class="black-text"><b>Score:</b> ${score} – ${comment}</span>`
     );
   } catch (error) {
     console.error("Error fetching evaluation:", error);
@@ -605,9 +606,12 @@ async function startGame(difficulty) {
   moveValidationEnabled = true;
   console.log(`Game started with difficulty: ${difficulty}`);
 
+  // Create initial PGN with just the starting position
+  const initialPgn = "[Event \"Casual Game\"]\n[Site \"Chess App\"]\n[Date \"" + new Date().toISOString().split('T')[0] + "\"]\n[White \"" + (boardOrientation === "white" ? "Player" : "AI") + "\"]\n[Black \"" + (boardOrientation === "white" ? "AI" : "Player") + "\"]\n[Result \"*\"]\n\n*";
+
   // Save the game at the start
   const saveResponse = await saveGame(
-    game.pgn(),
+    initialPgn,
     boardOrientation === "white" ? "Player" : "AI",
     boardOrientation === "white" ? "AI" : "Player",
     "*" // Game in progress
@@ -724,11 +728,29 @@ async function saveGame(pgn, white, black, result) {
     const data = await response.json();
     console.log("Game saved successfully:", data);
 
-    
+    // Store the game ID in localStorage for move recording
+    if (data.game_id) {
+      const updatedUserData = { ...userData, current_game_id: data.game_id };
+      localStorage.setItem("user", JSON.stringify(updatedUserData));
+    }
 
-    return data;
+      return data;
   } catch (error) {
     console.error("Error saving game:", error);
+    return { error: error.message };
+  }
+}
+
+async function updateGameResult(gameId, result) {
+  try {
+    const response = await fetch(`/update_game/${gameId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ result }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Error updating game result:", error);
     return { error: error.message };
   }
 }
@@ -829,18 +851,16 @@ $(document).on("click", function (e) {
 initializeBoard("white");
 setupPlayButton();
 
-function showCheckmateOptions() {
+async function showCheckmateOptions() {
   // Determine the winner
   const winner = game.turn() === "w" ? "Black" : "White";
   const result = winner === 'White' ? '1-0' : '0-1';
 
   // Save the game result before showing the modal
-  saveGame(
-    game.pgn(),
-    boardOrientation === 'white' ? "Player" : "AI",
-    boardOrientation === 'black' ? "AI" : "Player",
-    result
-);
+  const userData = await getUserData();
+    if (userData && userData.current_game_id) {
+      await updateGameResult(userData.current_game_id, result);
+    }
 
   $("#resignButton").replaceWith(`
         <button id="newGameButton" class="btn btn-success mt-3 fs-5">New Game</button>
@@ -888,7 +908,6 @@ function closeCheckmateModal() {
 }
 
 async function recordMove(gameId, gameState) {
-  // If no gameId is provided, queue the move for later and show a warning
   if (!gameId) {
     console.warn("No game ID available - move recording queued for later");
     moveRecordingQueue.push(gameState);
@@ -899,13 +918,19 @@ async function recordMove(gameId, gameState) {
   try {
     showRecordingStatus("pending");
 
+    console.log("Recording move number:", game.history().length);
+
     const response = await fetch("/record_move", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         game_id: gameId,
-        game_state: gameState,
         move_number: game.history().length,
+        game_state: gameState,
+        score: 0, // Will be updated by analysis
+        is_blunder: false,
+        is_brilliant: false,
+        comment: ""
       }),
     });
 
@@ -925,32 +950,47 @@ async function recordMove(gameId, gameState) {
   } catch (error) {
     console.error("Error recording move:", error);
     showRecordingStatus("error");
-
-    moveRecordingQueue.push({ ...moveData, gameId });
-
     return null;
   }
 }
 
-async function recordAIMove(gameId, move, fenAfter, evaluation) {
-  // Convert the AI move to SAN format
-  const tempGame = new Chess(fenAfter);
-  tempGame.undo(); // Go back to before the move
-  const sanMove = tempGame.move({
-    from: move.slice(0, 2),
-    to: move.slice(2, 4),
-    promotion: move.length > 4 ? move[4] : undefined,
-  }).san;
+async function recordAIMove(gameId, move, fenBefore, fenAfter, evaluation) {
+  try {
+    const tempGame = new Chess(fenBefore);
+    const moveResult = tempGame.move({
+      from: move.slice(0, 2),
+      to: move.slice(2, 4),
+      promotion: move.length > 4 ? move[4] : undefined,
+    });
 
-  const moveData = {
-    move_number: tempGame.history().length,
-    san: sanMove,
-    uci: move,
-    fen: fenAfter,
-    score: evaluation,
-  };
+    if (moveResult === null) {
+      console.error("Invalid AI move:", move, "FEN:", fenBefore);
+      return null;
+    }
 
-  return await recordMove(gameId, moveData);
+    const response = await fetch("/record_move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        game_id: gameId,
+        move_number: game.history().length,
+        game_state: fenAfter,
+        score: evaluation || 0,
+        is_blunder: false,
+        is_brilliant: false,
+        comment: ""
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to record AI move");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error recording AI move:", error);
+    return null;
+  }
 }
 
 function showRecordingStatus(status) {

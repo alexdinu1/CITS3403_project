@@ -95,7 +95,7 @@ async function loadAndDisplayStats() {
         let analysis = [];
         
         if (stats.last_game_id) {
-          console.log("Fetching analysis for game ID:", stats.last_game_id);
+          console.log("Fetching analysis for game ID:", stats.last_game_id - 1);
           analysis = await fetchGameAnalysis(stats.last_game_id);
           console.log("Received analysis data:", analysis);
         }
@@ -170,41 +170,83 @@ async function fetchGameAnalysis(gameId) {
 }
 
 function updateStatsDisplay(stats, analysis) {
-  if (!analysis || analysis.length === 0) {
-    analysis = [];
-  }
-  
+  // Fallbacks for missing data
+  analysis = Array.isArray(analysis) ? analysis : [];
+  stats = stats || {};
+
   // Find best and worst moves
   const bestMove = analysis.length > 0 
     ? analysis.reduce((best, move) => {
         if (move.is_brilliant) return move; // Prefer brilliant moves
         return move.score > best.score ? move : best;
-      }, { score: -1, move_number: 'N/A' })
+      }, { score: -Infinity, move_number: 'N/A' })
     : { score: 'N/A', move_number: 'N/A' };
     
   const worstMove = analysis.length > 0
     ? analysis.reduce((worst, move) => {
         if (move.is_blunder) return move; // Prefer blunders
         return move.score < worst.score ? move : worst;
-      }, { score: 11, move_number: 'N/A' })
+      }, { score: Infinity, move_number: 'N/A' })
     : { score: 'N/A', move_number: 'N/A' };
 
-  // Update Last Played stats with more detailed information
-  document.getElementById('bestMove').textContent = bestMove.move_number !== 'N/A' 
-    ? `Move ${bestMove.move_number} (${bestMove.score.toFixed(1)})${bestMove.is_brilliant ? ' ★' : ''}` 
-    : 'N/A';
-    
-  document.getElementById('worstMove').textContent = worstMove.move_number !== 'N/A'
-    ? `Move ${worstMove.move_number} (${worstMove.score.toFixed(1)})${worstMove.is_blunder ? ' ⚠' : ''}` 
-    : 'N/A';
-    
-  document.getElementById('lastGameAvg').textContent = stats.average_score 
-    ? stats.average_score.toFixed(1) 
-    : 'N/A';
+  // Helper to safely set text content
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  // Best move
+  setText(
+    'bestMove',
+    bestMove.move_number !== 'N/A'
+      ? `Move ${bestMove.move_number} (${typeof bestMove.score === 'number' ? bestMove.score.toFixed(1) : bestMove.score})${bestMove.is_brilliant ? ' ★' : ''}`
+      : 'N/A'
+  );
+
+  // Worst move
+  setText(
+    'worstMove',
+    worstMove.move_number !== 'N/A'
+      ? `Move ${worstMove.move_number} (${typeof worstMove.score === 'number' ? worstMove.score.toFixed(1) : worstMove.score})${worstMove.is_blunder ? ' ⚠' : ''}`
+      : 'N/A'
+  );
+
+  // Last game average
+  setText(
+    'lastGameAvg',
+    typeof stats.average_score === 'number'
+      ? stats.average_score.toFixed(1)
+      : 'N/A'
+  );
+
+  // Highest and lowest averages (if available)
+  setText(
+    'highestAvg',
+    typeof stats.highest_average === 'number'
+      ? stats.highest_average.toFixed(1)
+      : 'N/A'
+  );
+  setText(
+    'lowestAvg',
+    typeof stats.lowest_average === 'number'
+      ? stats.lowest_average.toFixed(1)
+      : 'N/A'
+  );
+
+  // Player rating
+  setText(
+    'playerRating',
+    typeof stats.rating === 'number'
+      ? stats.rating
+      : 'N/A'
+  );
 
   // Update the insights generation to use the new data
   const insights = generateInsights(stats, analysis);
-  document.getElementById('gameInsights').innerHTML = insights.map(i => `<p>${i}</p>`).join('');
+  const insightsEl = document.getElementById('gameInsights');
+  if (insightsEl) {
+    insightsEl.innerHTML = insights.map(i => `<p>${i}</p>`).join('');
+  }
 }
 
 function showLoadingStates() {
@@ -279,7 +321,7 @@ function generateInsights(stats, analysis) {
   // Opening game analysis
   const openingMoves = analysis.filter(move => move.move_number <= 10);
   if (openingMoves.length > 0) {
-    const avgOpeningScore = openingMoves.reduce((sum, move) => sum + move.score, 0) / openingMoves.length;
+    const avgOpeningScore = openingMoves.reduce((sum, move) => sum + (typeof move.score === 'number' ? move.score : 0), 0) / openingMoves.length;
     if (avgOpeningScore > 7) {
       insights.push(`Strong opening play! Average score: ${avgOpeningScore.toFixed(1)}`);
     } else if (avgOpeningScore < 5) {
@@ -288,12 +330,22 @@ function generateInsights(stats, analysis) {
   }
   
   // Best move analysis
-  if (bestMove.move_number !== 'N/A') {
+  const bestMove = analysis.reduce((best, move) => {
+    if (move.is_brilliant) return move;
+    return (typeof move.score === 'number' && (typeof best.score !== 'number' || move.score > best.score)) ? move : best;
+  }, { score: -Infinity, move_number: 'N/A' });
+
+  if (bestMove.move_number !== 'N/A' && typeof bestMove.score === 'number') {
     insights.push(`Your best move was #${bestMove.move_number} with score ${bestMove.score.toFixed(1)}`);
   }
   
   // Worst move analysis
-  if (worstMove.move_number !== 'N/A' && worstMove.score < 5) {
+  const worstMove = analysis.reduce((worst, move) => {
+    if (move.is_blunder) return move;
+    return (typeof move.score === 'number' && (typeof worst.score !== 'number' || move.score < worst.score)) ? move : worst;
+  }, { score: Infinity, move_number: 'N/A' });
+
+  if (worstMove.move_number !== 'N/A' && typeof worstMove.score === 'number' && worstMove.score < 5) {
     insights.push(`Critical mistake at move #${worstMove.move_number} (score ${worstMove.score.toFixed(1)})`);
   }
   
@@ -311,8 +363,8 @@ function generateInsights(stats, analysis) {
     const firstHalf = analysis.slice(0, Math.floor(analysis.length / 2));
     const secondHalf = analysis.slice(Math.floor(analysis.length / 2));
     
-    const firstHalfAvg = firstHalf.reduce((sum, move) => sum + move.score, 0) / firstHalf.length;
-    const secondHalfAvg = secondHalf.reduce((sum, move) => sum + move.score, 0) / secondHalf.length;
+    const firstHalfAvg = firstHalf.reduce((sum, move) => sum + (typeof move.score === 'number' ? move.score : 0), 0) / firstHalf.length;
+    const secondHalfAvg = secondHalf.reduce((sum, move) => sum + (typeof move.score === 'number' ? move.score : 0), 0) / secondHalf.length;
     
     if (secondHalfAvg > firstHalfAvg) {
       insights.push(`Your play improved as the game progressed (+${(secondHalfAvg - firstHalfAvg).toFixed(1)} points)`);
@@ -414,14 +466,10 @@ function initializeCharts(stats, analysis) {
   // Last Played Chart (using real data if available)
   const lastPlayedCtx = document.getElementById('lastPlayedChart').getContext('2d');
   
-  // Create labels and data from analysis, or use sample data if none available
-  const moveLabels = analysis && analysis.length > 0 
-    ? analysis.map(item => item.move_number) 
-    : Array.from({ length: 22 }, (_, i) => i + 1);
-    
-  const moveScores = analysis && analysis.length > 0
-    ? analysis.map(item => item.score)
-    : [8.3, 8.7, 7.1, 8.5, 6.2, 7.8, 9.4, 8.6, 7.3, 4.9, 5.1, 6.4, 6.7, 5.2, 6.8, 5.5, 3.6, 4.3, 3.9, 4.1, 2.7, 1.5];
+  // Filter for moves with non-zero scores
+  const filteredAnalysis = analysis.filter(move => typeof move.score === 'number' && move.score !== 0);
+  const moveLabels = filteredAnalysis.map(move => move.move_number);
+  const moveScores = filteredAnalysis.map(move => move.score);
 
   chartInstances.lastPlayed = new Chart(lastPlayedCtx, {
     type: 'line',
@@ -437,7 +485,28 @@ function initializeCharts(stats, analysis) {
             fill: true
         }]
     },
-    options: getChartOptions('Move Number')
+    options: {
+        responsive: true,
+        scales: {
+            x: {
+                title: {
+                    display: true,
+                    text: 'Game Phase'
+                }
+            },
+            y: {
+                title: {
+                    display: true,
+                    text: 'Evaluation (centipawns)'
+                },
+                min: -1000,
+                max: 1000,
+                ticks: {
+                    stepSize: 200
+                }
+            }
+        }
+    }
   });
 
   // Generate or use average scores by move range
@@ -510,10 +579,10 @@ function getChartOptions(xAxisTitle) {
                   display: true,
                   text: 'Score'
               },
-              min: 0,
-              max: 10,
+              min: -1000,
+              max: 1000,
               ticks: {
-                  stepSize: 1
+                  stepSize: 200
               },
               grid: {
                   color: 'rgba(0, 0, 0, 0.1)'

@@ -12,7 +12,7 @@ def record_move():
         data = request.get_json()
         
         # Validate required fields
-        required_fields = ['game_id', 'move_number', 'game_state']
+        required_fields = ['game_id', 'move_number', 'game_state', 'score', 'is_blunder', 'is_brilliant', 'comment']
         for field in required_fields:
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
@@ -21,7 +21,11 @@ def record_move():
         new_move = Move(
             game_id=data['game_id'],
             move_number=data['move_number'],
-            game_state=data['game_state']
+            game_state=data['game_state'],
+            score=data['score'],
+            is_blunder=data['is_blunder'],
+            is_brilliant=data['is_brilliant'],
+            comment=data['comment']
         )
         
         db.session.add(new_move)

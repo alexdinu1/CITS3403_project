@@ -133,12 +133,12 @@ def evaluate_move():
         board_after.push(move)
 
         with chess.engine.SimpleEngine.popen_uci(get_stockfish_path()) as engine:
-            # Check if the player checkmated the AI
             if board_after.is_checkmate():
                 return jsonify({
-                    'cpl': 0,
                     'score': 10,
-                    'feedback': "Checkmate! You won the game."
+                    'is_blunder': False,
+                    'is_brilliant': True,
+                    'comment': "Checkmate! You won the game."
                 })
 
             info_before = engine.analyse(board_before, chess.engine.Limit(depth=15))
@@ -158,46 +158,17 @@ def evaluate_move():
 
             eval_before = score_to_cp(score_before)
             eval_after = score_to_cp(score_after)
-
             cpl = abs(eval_before - eval_after)
 
-            if score_after.is_mate():
-                mate_val = score_after.mate()
-                if mate_val > 0:
-                    feedback = f"You're delivering mate in {mate_val}"
-                    score_value = 10
-                else:
-                    feedback = f"Opponent has mate in {abs(mate_val)}"
-                    score_value = 0
-            elif score_before.is_mate():
-                mate_val = score_before.mate()
-                if mate_val > 0:
-                    feedback = f"You were delivering mate in {mate_val}, don't miss it!"
-                    score_value = 5
-                else:
-                    feedback = f"Opponent was mating in {abs(mate_val)}, stay alert!"
-                    score_value = 1
-            else:
-                if cpl == 0:
-                    feedback = "Best move!"
-                    score_value = 10
-                elif cpl < 50:
-                    feedback = "Good move."
-                    score_value = 8
-                elif cpl < 150:
-                    feedback = "Inaccuracy."
-                    score_value = 5
-                elif cpl < 400:
-                    feedback = "Mistake."
-                    score_value = 3
-                else:
-                    feedback = "Blunder!"
-                    score_value = 0
+            # Determine if move is a blunder or brilliant
+            is_blunder = cpl > 200  # More than 2 pawns lost
+            is_brilliant = cpl > 300 and eval_after > eval_before  # Gained more than 3 pawns
 
             return jsonify({
-                'cpl': cpl,
-                'score': score_value,
-                'feedback': feedback
+                'score': eval_after,
+                'is_blunder': is_blunder,
+                'is_brilliant': is_brilliant,
+                'comment': generate_comment(eval_after)
             })
 
     except Exception as e:
@@ -283,6 +254,21 @@ def save_game():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
+@chess_bp.route('/update_game/<int:game_id>', methods=['POST'])
+def update_game(game_id):
+    data = request.json
+    result = data.get('result')
+    if not result:
+        return jsonify({'error': 'Missing result'}), 400
+
+    game = Game.query.get(game_id)
+    if not game:
+        return jsonify({'error': 'Game not found'}), 404
+
+    game.result = result
+    db.session.commit()
+    return jsonify({'status': 'success', 'game_id': game.id})
 
 @chess_bp.route('/player_stats/<player_name>')
 def get_player_stats_by_name(player_name):
@@ -326,3 +312,18 @@ def get_game_analysis(game_id):
         'is_brilliant': m.is_brilliant,
         'comment': m.comment
     } for m in moves])
+
+def generate_comment(score):
+    """Generate a comment based on the move's score."""
+    if score > 300:
+        return "Excellent tactical play."
+    elif score > 100:
+        return "Maintaining advantage."
+    elif score > 0:
+        return "Slightly better position."
+    elif score > -100:
+        return "Position is equal."
+    elif score > -300:
+        return "Slight disadvantage."
+    else:
+        return "Significant disadvantage."
