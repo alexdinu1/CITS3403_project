@@ -571,6 +571,15 @@ $(document).on('click', '#prevMove', () => {
         updateNavigationButtons();
 
         aiMoveRequestId++; // Invalidate any in-flight AI move
+
+        // --- FIX: If it's AI's turn, trigger AI move ---
+        if (moveValidationEnabled) {
+            const isPlayersTurn = (boardOrientation === 'white' && game.turn() === 'w') ||
+                                  (boardOrientation === 'black' && game.turn() === 'b');
+            if (!isPlayersTurn && !game.game_over()) {
+                playAIMove();
+            }
+        }
     }
 });
 // Modify the Next button click handler
@@ -585,6 +594,14 @@ $(document).on('click', '#nextMove', () => {
 
         aiMoveRequestId++; // Invalidate any in-flight AI move
 
+        // --- FIX: If it's AI's turn, trigger AI move ---
+        if (moveValidationEnabled) {
+            const isPlayersTurn = (boardOrientation === 'white' && game.turn() === 'w') ||
+                                  (boardOrientation === 'black' && game.turn() === 'b');
+            if (!isPlayersTurn && !game.game_over()) {
+                playAIMove();
+            }
+        }
     }
 });
 
