@@ -93,9 +93,18 @@ async function loadAndDisplayStats() {
 
         // Fetch game analysis if available
         let analysis = [];
+        
         if (stats.last_game_id) {
-            analysis = await fetchGameAnalysis(stats.last_game_id);
+          console.log("Fetching analysis for game ID:", stats.last_game_id);
+          analysis = await fetchGameAnalysis(stats.last_game_id);
+          console.log("Received analysis data:", analysis);
         }
+
+        if (analysis.length === 0) {
+    document.getElementById('gameInsights').innerHTML = 
+        "<p>No analysis available for this game yet.</p>";
+    return;
+}
 
         // Update the UI
         updateStatsDisplay(stats, analysis);
@@ -123,13 +132,45 @@ async function fetchPlayerStats() {
 }
 
 async function fetchGameAnalysis(gameId) {
-    try {
-        const response = await fetch(`/api/game_analysis/${gameId}`);
-        return response.ok ? await response.json() : [];
-    } catch (error) {
-        console.warn("Error loading game analysis:", error);
-        return [];
-    }
+  try {
+      if (!gameId) {
+          console.warn("No game ID provided for analysis");
+          return [];
+      }
+
+      // Show loading state
+      document.getElementById('gameInsights').innerHTML = "<p>Analyzing game moves...</p>";
+
+      const response = await fetch(`/api/game_analysis/${gameId}`);
+      
+      if (!response.ok) {
+          if (response.status === 404) {
+              console.log("No analysis found for this game");
+              return [];
+          }
+          throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const analysis = await response.json();
+      
+      // Ensure the data is in the expected format
+      if (!Array.isArray(analysis)) {
+          console.warn("Unexpected analysis format:", analysis);
+          return [];
+      }
+
+      // Sort by move number just in case
+      analysis.sort((a, b) => a.move_number - b.move_number);
+      
+      return analysis;
+
+  } catch (error) {
+      console.error("Error fetching game analysis:", error);
+      // Show error message to user
+      document.getElementById('gameInsights').innerHTML = 
+          "<p>Couldn't load game analysis. Please try again later.</p>";
+      return [];
+  }
 }
 
 function showLoadingStates() {

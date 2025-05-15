@@ -39,6 +39,51 @@ function initializeBoard(orientation) {
     console.log(`Board initialized with orientation: ${orientation}`);
 }
 
+async function getUserData() {
+    try {
+        const storedUserData = localStorage.getItem('user');
+        if (storedUserData) {
+            const userData = JSON.parse(storedUserData);
+            if (userData && (userData.user_id || userData.id)) {
+                // If we have valid user data in localStorage, use it
+                return userData;
+            }
+        }
+        
+        // If no valid localStorage data, try to get from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('user_id');
+        
+        if (userId) {
+            // We have user ID in URL parameters
+            const userResponse = await fetch(`/api/current_user/${userId}`);
+            if (userResponse.ok) {
+                const userData = await userResponse.json();
+                // Save to localStorage for future use
+                localStorage.setItem('user', JSON.stringify(userData));
+                return userData;
+            }
+        }
+        
+        // If no URL parameter or it failed, try to get from session endpoint
+        const response = await fetch('/api/current_user');
+        if (!response.ok) {
+            console.error('Not logged in or session expired');
+            return null;
+        }
+        
+        const userData = await response.json();
+        // Save to localStorage for future use
+        localStorage.setItem('user', JSON.stringify(userData));
+        return userData;
+    } catch (error) {
+        console.error('Error getting user data:', error);
+        // If there was an error, clear localStorage to be safe
+        localStorage.removeItem('user');
+        return null;
+    }
+}
+
 async function getAIMove(fen) {
     console.log("Sending FEN to Stockfish:", fen);
     console.log("Selected difficulty:", selectedDifficulty);
@@ -166,16 +211,49 @@ function getGameResult() {
     return '*';
 }
 
-function showGameResult(result) {
+async function showGameResult(result) {
     let message = "";
-    switch(result) {
-        case '1-0': message = "White wins!"; break;
-        case '0-1': message = "Black wins!"; break;
-        case '1/2-1/2': message = "Draw!"; break;
-        default: message = "Game ended"; break;
+    try {
+        // Display a saving indicator
+        console.log("Attempting to save game with result:", result);
+        
+        // Call saveGame and await the response
+        const saveResponse = await saveGame(
+            game.pgn(),
+            boardOrientation === 'white' ? "Player" : "AI",
+            boardOrientation === 'white' ? "AI" : "Player",
+            result
+        );
+        
+        // Check if there was an error in the response
+        if (saveResponse.error) {
+            console.error("Save game returned an error:", saveResponse.error);
+            throw new Error(saveResponse.error);
+        }
+        
+        // Log success information
+        console.log("Game saved successfully with ID:", saveResponse.game_id);
+        
+        // Set success message
+        switch(result) {
+            case '1-0': message = "White wins! Game saved successfully."; break;
+            case '0-1': message = "Black wins! Game saved successfully."; break;
+            case '1/2-1/2': message = "Draw! Game saved successfully."; break;
+            default: message = "Game ended and was saved successfully."; break;
+        }
+        
+        // Show message to user
+        alert(message);
+        
+        $('#viewStatsButton')(() => {
+            window.location.href = '/stats';
+        });
+        
+    } catch (error) {
+        // Handle error
+        console.error("Error in showGameResult:", error);
+        alert(`Game ended (${result}), but there was an error saving: ${error.message}`);
     }
-    
-    alert(message);
 }
 
 async function evaluatePlayerMove(fenBefore, move) {
@@ -499,8 +577,43 @@ function startGame(difficulty) {
 
 async function saveGame(pgn, white, black, result) {
     try {
-        console.log("Attempting to save game:", { pgn, white, black, result });
+        // Get user data from localStorage or API
+        const userData = await getUserData();
         
+        // Check if we have valid user data
+        if (!userData) {
+            console.error("No user data available - cannot save game");
+            return { error: "User not authenticated" };
+        }
+
+        // Extract user ID - handle both user_id and id properties
+        const userId = userData.user_id || userData.id;
+        if (!userId) {
+            console.error("User ID not found in user data");
+            return { error: "Invalid user data" };
+        }
+
+        // Validate required fields before sending
+        if (!pgn) {
+            console.error("PGN is required but missing");
+            return { error: "Missing PGN data" };
+        }
+
+        // Ensure white and black player identifiers are set
+        const whiteName = white || "Player";
+        const blackName = black || "AI";
+        
+        // Ensure result is valid
+        const validResult = result || "*";
+
+        console.log("Saving game with data:", {
+            pgn: pgn,
+            white: whiteName,
+            black: blackName,
+            result: validResult,
+            user_id: userId
+        });
+
         const response = await fetch('/save_game', {
             method: 'POST',
             headers: {
@@ -508,23 +621,23 @@ async function saveGame(pgn, white, black, result) {
             },
             body: JSON.stringify({
                 pgn: pgn,
-                white: white || "Player",  // Default values
-                black: black || "AI",
-                result: result || "*"      // '*' means unfinished
+                white: whiteName,
+                black: blackName,
+                result: validResult,
+                user_id: userId
             })
         });
 
-        const data = await response.json();
-        
         if (!response.ok) {
-            throw new Error(data.error || "Failed to save game");
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to save game");
         }
 
+        const data = await response.json();
         console.log("Game saved successfully:", data);
         return data;
     } catch (error) {
         console.error("Error saving game:", error);
-        // Consider showing an error message to the user
         return { error: error.message };
     }
 }

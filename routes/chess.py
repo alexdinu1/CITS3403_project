@@ -210,19 +210,74 @@ def save_game():
     white = data.get('white')
     black = data.get('black')
     result = data.get('result')
+    user_id = data.get('user_id')  # Get user_id sent from frontend
 
     if not pgn or not white or not black or not result:
         return jsonify({'error': 'Missing required fields'}), 400
+        
+    if not user_id:
+        # If user_id is missing, just save the game without updating stats
+        try:
+            game = Game(
+                pgn=pgn,
+                white_player=white,
+                black_player=black,
+                result=result
+            )
+            db.session.add(game)
+            db.session.commit()
+            return jsonify({'status': 'success', 'game_id': game.id, 'warning': 'Game saved without user stats update'})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
 
     try:
+        # Create and add the game first
         game = Game(
             pgn=pgn,
             white_player=white,
             black_player=black,
             result=result,
-            date_played=None
+            user_id=user_id  # Set the user_id on the game
         )
         db.session.add(game)
+        db.session.flush()  # This assigns an ID to the game without committing
+
+        # Find or create player stats for this user
+        stats = PlayerStats.query.filter_by(user_id=user_id).first()
+        if not stats:
+            stats = PlayerStats(user_id=user_id, wins=0, losses=0, draws=0, rating=1200, highest_rating=1200)
+            db.session.add(stats)
+        
+        # Convert chess notation result to win/loss/draw status from the perspective of the current user
+        is_player_white = (white == "Player")
+        
+        # Update stats based on game result
+        if result == '1-0':  # White wins
+            if is_player_white:
+                stats.wins += 1
+                stats.rating += 10
+            else:
+                stats.losses += 1
+                stats.rating -= 8
+        elif result == '0-1':  # Black wins
+            if not is_player_white:
+                stats.wins += 1
+                stats.rating += 10
+            else:
+                stats.losses += 1
+                stats.rating -= 8
+        elif result == '1/2-1/2':  # Draw
+            stats.draws += 1
+            stats.rating += 2
+            
+        # Update highest rating if needed
+        if stats.rating > stats.highest_rating:
+            stats.highest_rating = stats.rating
+        
+        # Update last game reference
+        stats.last_game_id = game.id
+
         db.session.commit()
         return jsonify({'status': 'success', 'game_id': game.id})
     except Exception as e:

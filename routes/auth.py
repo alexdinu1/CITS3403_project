@@ -78,7 +78,7 @@ def register():
             draws=0,
             rating=1000,
             highest_rating=1000,
-            last_game_id=None
+            last_game_id=None,
         )
         db.session.add(stats)
         db.session.commit()
