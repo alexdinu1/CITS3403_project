@@ -483,17 +483,20 @@ function startGame(difficulty) {
 
         // Add click event to redirect to the stats page
         $('#resignButton').click(async () => {
-            const result = boardOrientation === 'white' ? '0-1' : '1-0';
-            const confirmation = confirm(`Are you sure you want to resign? This will count as a ${result === '1-0' ? 'win' : 'loss'} for the AI.`);
-            
+            // Show a warning before resigning
+            const warningMsg = "Are you sure you want to resign?\n\nThis will count as a loss for you, and this game's scores will NOT be included in the stats page.";
+            const confirmation = confirm(warningMsg);
+
             if (confirmation) {
+                const result = boardOrientation === 'white' ? '0-1' : '1-0';
+                // Save the game as a resignation (but do not include in stats)
                 await saveGame(
                     game.pgn(),
                     boardOrientation === 'white' ? "Player" : "AI",
                     boardOrientation === 'white' ? "AI" : "Player",
                     result
                 );
-                window.location.href = '/stats'; // Redirect to the stats page
+                showResignationModal(result);
             }
         });
 
@@ -686,4 +689,57 @@ function showCheckmateOptions() {
 
 function closeCheckmateModal() {
     $('#checkmateModal').remove(); // Remove the modal from the DOM
+}
+
+function showResignationModal(result) {
+    // Determine the winner
+    const winner = result === '1-0' ? 'White' : 'Black';
+
+    // Remove the resign button and add new game/stats buttons
+    $('#resignButton').replaceWith(`
+        <button id="newGameButton" class="btn btn-success mt-3 fs-5">New Game</button>
+        <button id="viewStatsButton" class="btn btn-secondary mt-3 fs-5">View Stats</button>
+    `);
+
+    // Create a modal dialog for resignation
+    const modalHtml = `
+        <div id="resignationModal" class="modal" tabindex="-1" role="dialog" style="display: block; background: rgba(0, 0, 0, 0.5);">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">You resigned. ${winner} wins!</h5>
+                    </div>
+                    <div class="modal-footer d-flex justify-content-center gap-2">
+                        <button id="reviewGameButton" class="btn btn-primary">Review Game</button>
+                        <button id="playAgainButton" class="btn btn-success">New Game</button>
+                        <button id="viewStatsButton" class="btn btn-secondary">View Stats</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Append the modal to the body
+    $('body').append(modalHtml);
+
+    // Add event listeners for the buttons
+    $('#reviewGameButton').click(() => {
+        closeResignationModal(); // Close the modal, leave board as is
+    });
+
+    $('#playAgainButton').click(() => {
+        location.reload(); // Refresh the page to start a new game
+    });
+
+    $('#newGameButton').click(() => {
+        location.reload(); // Refresh the page to start a new game
+    });
+
+    $('#viewStatsButton').click(() => {
+        window.location.href = '/stats'; // Redirect to stats page
+    });
+}
+
+function closeResignationModal() {
+    $('#resignationModal').remove(); // Remove the modal from the DOM
 }
