@@ -1,7 +1,9 @@
 from flask import Blueprint, jsonify
-from models import db, PlayerStats, GameAnalysis, Game, User
+from models import db, PlayerStats, GameAnalysis, Game, User, Move
 from sqlalchemy import func
 import math
+import chess
+import chess.pgn
 
 stats_bp = Blueprint('stats', __name__)
 
@@ -93,20 +95,58 @@ def get_player_stats_by_id(user_id):
 @stats_bp.route('/api/game_analysis/<int:game_id>')
 def get_game_analysis(game_id):
     try:
-        # First check if game exists
+        # First check if game exists and is analyzed
         game = Game.query.get(game_id)
         if not game:
             return jsonify({'error': 'Game not found'}), 404
             
-        analysis = GameAnalysis.query.filter_by(game_id=game_id).order_by(GameAnalysis.move_number).all()
+        # Check if game has been analyzed
+        if not game.analyzed:
+            return jsonify({'error': 'Game not analyzed yet'}), 404
+            
+        # Get all analysis for this game, ordered by move number
+        analysis = GameAnalysis.query.filter_by(game_id=game_id)\
+                          .order_by(GameAnalysis.move_number)\
+                          .all()
+        
         if not analysis:
             return jsonify({'error': 'No analysis found for this game'}), 404
             
-        return jsonify([{
+        # Format the analysis data for response
+        analysis_data = [{
             'move_number': a.move_number,
             'score': a.score,
-            'comment': a.comment
-        } for a in analysis])
+            'is_blunder': a.is_blunder,
+            'is_brilliant': a.is_brilliant,
+            'comment': a.comment,
+            'fen': get_fen_for_move(game, a.move_number)  # Helper function to get FEN
+        } for a in analysis]
+
+        return jsonify(analysis_data)
+        
     except Exception as e:
         print(f"Error in get_game_analysis: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+def get_fen_for_move(game, move_number):
+    """
+    Helper function to get the FEN after a specific move number
+    """
+    try:
+        # Get all moves up to the requested move number
+        moves = Move.query.filter_by(game_id=game.id)\
+                   .filter(Move.move_number <= move_number)\
+                   .order_by(Move.move_number)\
+                   .all()
+        
+        # Replay the moves to get the position
+        board = chess.Board()
+        for move in moves:
+            chess_move = chess.Move.from_uci(move.uci)
+            board.push(chess_move)
+            
+        return board.fen()
+        
+    except Exception as e:
+        print(f"Error getting FEN for move {move_number}: {str(e)}")
+        return None
