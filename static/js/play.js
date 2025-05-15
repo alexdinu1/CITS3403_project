@@ -187,12 +187,12 @@ function showGameResult(result) {
     alert(message);
 }
 
-async function evaluatePlayerMove(fenBefore, fenAfter) {
+async function evaluatePlayerMove(fenBefore, move) {
     try {
         const response = await fetch('/evaluate_move', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fen_before: fenBefore, fen_after: fenAfter })
+            body: JSON.stringify({ fen_before: fenBefore, move: move })
         });
 
         const data = await response.json();
@@ -275,7 +275,10 @@ function onSquareClick(square) {
                     removeHighlights();
 
                     const fenAfter = game.fen();
-                    evaluatePlayerMove(fenBefore, fenAfter);
+                    const uciMove = move.promotion
+                        ? `${move.from}${move.to}${move.promotion}`
+                        : `${move.from}${move.to}`;
+                    evaluatePlayerMove(fenBefore, uciMove);
 
                     moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
                     moveHistory.push(game.fen());
@@ -308,7 +311,10 @@ function onSquareClick(square) {
             removeHighlights();
 
             const fenAfter = game.fen();
-            evaluatePlayerMove(fenBefore, fenAfter);
+            const uciMove = move.promotion
+                ? `${move.from}${move.to}${move.promotion}`
+                : `${move.from}${move.to}`;
+            evaluatePlayerMove(fenBefore, uciMove);
 
             moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
             moveHistory.push(game.fen());
@@ -565,11 +571,6 @@ $(document).on('click', '#prevMove', () => {
         updateNavigationButtons();
 
         aiMoveRequestId++; // Invalidate any in-flight AI move
-
-        // Check if it's AI's turn (i.e., NOT the player's turn)
-        if (game.turn() !== boardOrientation[0]) {
-            playAIMove(); // Trigger AI
-        }
     }
 });
 // Modify the Next button click handler
@@ -584,9 +585,6 @@ $(document).on('click', '#nextMove', () => {
 
         aiMoveRequestId++; // Invalidate any in-flight AI move
 
-        if (game.turn() !== boardOrientation[0]) {
-            playAIMove(); // Trigger AI
-        }
     }
 });
 
