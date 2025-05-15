@@ -141,30 +141,14 @@ async function fetchGameAnalysis(gameId) {
       // Show loading state
       document.getElementById('gameInsights').innerHTML = "<p>Analyzing game moves...</p>";
 
-      // First try to get existing analysis
-      let response = await fetch(`/api/game_analysis/${gameId}`);
+      const response = await fetch(`/api/game_analysis/${gameId}`);
       
-      // If no analysis exists or it's not yet analyzed, request analysis
-      if (response.status === 404 || !response.ok) {
-          console.log("No existing analysis found. Requesting analysis...");
-          
-          // Request server to analyze the game
-          response = await fetch(`/analyze_game/${gameId}`, {
-              method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json'
-              }
-          });
-          
-          if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+          if (response.status === 404) {
+              console.log("No analysis found for this game");
+              return [];
           }
-          
-          // If we just analyzed the game, get the fresh analysis
-          response = await fetch(`/api/game_analysis/${gameId}`);
-          if (!response.ok) {
-              throw new Error(`Failed to get fresh analysis: ${response.status}`);
-          }
+          throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const analysis = await response.json();
@@ -175,66 +159,18 @@ async function fetchGameAnalysis(gameId) {
           return [];
       }
 
-      // Transform data to match our expected structure if needed
-      const formattedAnalysis = analysis.map(item => ({
-          move_number: item.move_number,
-          score: item.score,
-          is_blunder: item.is_blunder,
-          is_brilliant: item.is_brilliant,
-          comment: item.comment
-      }));
-
       // Sort by move number just in case
-      formattedAnalysis.sort((a, b) => a.move_number - b.move_number);
+      analysis.sort((a, b) => a.move_number - b.move_number);
       
-      console.log("Analysis data received:", formattedAnalysis);
-      return formattedAnalysis;
+      return analysis;
 
   } catch (error) {
       console.error("Error fetching game analysis:", error);
       // Show error message to user
       document.getElementById('gameInsights').innerHTML = 
-          `<p>Couldn't load game analysis: ${error.message}</p>`;
+          "<p>Couldn't load game analysis. Please try again later.</p>";
       return [];
   }
-}
-
-function updateStatsDisplay(stats, analysis) {
-  if (!analysis || analysis.length === 0) {
-    analysis = [];
-  }
-  
-  // Find best and worst moves
-  const bestMove = analysis.length > 0 
-    ? analysis.reduce((best, move) => {
-        if (move.is_brilliant) return move; // Prefer brilliant moves
-        return move.score > best.score ? move : best;
-      }, { score: -1, move_number: 'N/A' })
-    : { score: 'N/A', move_number: 'N/A' };
-    
-  const worstMove = analysis.length > 0
-    ? analysis.reduce((worst, move) => {
-        if (move.is_blunder) return move; // Prefer blunders
-        return move.score < worst.score ? move : worst;
-      }, { score: 11, move_number: 'N/A' })
-    : { score: 'N/A', move_number: 'N/A' };
-
-  // Update Last Played stats with more detailed information
-  document.getElementById('bestMove').textContent = bestMove.move_number !== 'N/A' 
-    ? `Move ${bestMove.move_number} (${bestMove.score.toFixed(1)})${bestMove.is_brilliant ? ' ★' : ''}` 
-    : 'N/A';
-    
-  document.getElementById('worstMove').textContent = worstMove.move_number !== 'N/A'
-    ? `Move ${worstMove.move_number} (${worstMove.score.toFixed(1)})${worstMove.is_blunder ? ' ⚠' : ''}` 
-    : 'N/A';
-    
-  document.getElementById('lastGameAvg').textContent = stats.average_score 
-    ? stats.average_score.toFixed(1) 
-    : 'N/A';
-
-  // Update the insights generation to use the new data
-  const insights = generateInsights(stats, analysis);
-  document.getElementById('gameInsights').innerHTML = insights.map(i => `<p>${i}</p>`).join('');
 }
 
 function showLoadingStates() {
@@ -294,17 +230,15 @@ function generateInsights(stats, analysis) {
     return ["Play some games to get personalized insights!"];
   }
   
-  // Count blunders and brilliant moves
-  const blunders = analysis.filter(move => move.is_blunder).length;
-  const brilliants = analysis.filter(move => move.is_brilliant).length;
+  const bestMove = analysis.reduce((best, move) => 
+    move.score > best.score ? move : best, 
+    { move_number: 'N/A', score: -1 }
+  );
   
-  if (blunders > 0) {
-    insights.push(`Found ${blunders} blunder${blunders > 1 ? 's' : ''} in this game.`);
-  }
-  
-  if (brilliants > 0) {
-    insights.push(`Made ${brilliants} brilliant move${brilliants > 1 ? 's' : ''}!`);
-  }
+  const worstMove = analysis.reduce((worst, move) => 
+    move.score < worst.score ? move : worst, 
+    { move_number: 'N/A', score: 11 }
+  );
   
   // Opening game analysis
   const openingMoves = analysis.filter(move => move.move_number <= 10);
@@ -413,7 +347,49 @@ function generatePerformanceInsights(stats) {
   }
   
   return insights.length > 0 ? insights : ["Play more games to get meaningful performance insights."];
-} 
+}
+
+function updateStatsDisplay(stats, analysis) {
+  if (!analysis || analysis.length === 0) {
+    analysis = [];
+  }
+  
+  const bestMove = analysis.length > 0 
+    ? analysis.reduce((best, move) => move.score > best.score ? move : best, { score: -1, move_number: 'N/A' })
+    : { score: 'N/A', move_number: 'N/A' };
+    
+  const worstMove = analysis.length > 0
+    ? analysis.reduce((worst, move) => move.score < worst.score ? move : worst, { score: 11, move_number: 'N/A' })
+    : { score: 'N/A', move_number: 'N/A' };
+
+  // Update Last Played stats
+  document.getElementById('bestMove').textContent = bestMove.move_number !== 'N/A' 
+    ? `Move ${bestMove.move_number} (${bestMove.score.toFixed(1)})` 
+    : 'N/A';
+    
+  document.getElementById('worstMove').textContent = worstMove.move_number !== 'N/A'
+    ? `Move ${worstMove.move_number} (${worstMove.score.toFixed(1)})` 
+    : 'N/A';
+    
+  document.getElementById('lastGameAvg').textContent = stats.average_score 
+    ? stats.average_score.toFixed(1) 
+    : 'N/A';
+
+  // Update Average stats
+  document.getElementById('highestAvg').textContent = stats.highest_average 
+    ? stats.highest_average.toFixed(1) 
+    : 'N/A';
+    
+  document.getElementById('lowestAvg').textContent = stats.lowest_average 
+    ? stats.lowest_average.toFixed(1) 
+    : 'N/A';
+    
+  document.getElementById('playerRating').textContent = stats.rating || '1000';
+
+  // Generate and display insights
+  const insights = generateInsights(stats, analysis);
+  document.getElementById('gameInsights').innerHTML = insights.map(i => `<p>${i}</p>`).join('');
+}
 
 function showErrorState() {
   if (lastPlayedChart) lastPlayedChart.destroy();
