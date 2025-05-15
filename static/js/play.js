@@ -379,9 +379,8 @@ $('#reset').click(() => {
 
 function setupPlayButton() {
     $('.container.text-center').html(`
-        <button id="playGame" class="btn btn-success btn-lg fs-3">Play Game</button>
-        <br>
-        <button class="btn btn-primary fs-3 m-4" id="backButton">Back</button>
+        <button id="playGame" class="btn btn-success fs-4">Play Game</button>
+        <button class="btn btn-primary fs-4 m-4" id="backButton">Back</button>
     `);
 
     $('#playGame').click(() => {
@@ -630,7 +629,7 @@ function showCheckmateOptions() {
                     </div>
                     <div class="modal-footer d-flex justify-content-center gap-2">
                         <button id="reviewGameButton" class="btn btn-primary">Review Game</button>
-                        <button id="newGameButton" class="btn btn-success">New Game</button>
+                        <button id="playAgainButton" class="btn btn-success">New Game</button>
                         <button id="viewStatsButton" class="btn btn-secondary">View Stats</button>
                     </div>
                 </div>
@@ -646,6 +645,11 @@ function showCheckmateOptions() {
         closeCheckmateModal(); // Close the modal
         // Do nothing, just leave the board as it is
     });
+
+    $('#playAgainButton').click(() => {
+        location.reload(); // Refresh the page to start a new game
+    }
+    );
 
     $('#newGameButton').click(() => {
         location.reload(); // Refresh the page to start a new game
