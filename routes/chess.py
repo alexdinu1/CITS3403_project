@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models import db, Game, PlayerStats, GameAnalysis
+from models import db, Game, PlayerStats, Move
 import chess
 import chess.engine
 import platform
@@ -279,7 +279,7 @@ def save_game():
         stats.last_game_id = game.id
 
         db.session.commit()
-        return jsonify({'status': 'success', 'game_id': game.id})
+        return jsonify({'game_status': 'success', 'game_id': game.id})
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -287,7 +287,7 @@ def save_game():
 @chess_bp.route('/player_stats/<player_name>')
 def get_player_stats_by_name(player_name):
     stats = PlayerStats.query.join(Game, PlayerStats.last_game_id == Game.id, isouter=True) \
-        .join(GameAnalysis, Game.id == GameAnalysis.game_id, isouter=True) \
+        .join(Move, Game.id == Move.game_id, isouter=True) \
         .join(Game, PlayerStats.user_id == Game.user_id, isouter=True) \
         .filter(Game.white_player == player_name).first()
     if not stats:
@@ -318,9 +318,11 @@ def get_player_stats_by_id(user_id):
 
 @chess_bp.route('/api/game_analysis/<int:game_id>')
 def get_game_analysis(game_id):
-    analysis = GameAnalysis.query.filter_by(game_id=game_id).order_by(GameAnalysis.move_number).all()
+    moves = Move.query.filter_by(game_id=game_id).order_by(Move.move_number).all()
     return jsonify([{
-        'move_number': a.move_number,
-        'score': a.score,
-        'comment': a.comment
-    } for a in analysis])
+        'move_number': m.move_number,
+        'score': m.score,
+        'is_blunder': m.is_blunder,
+        'is_brilliant': m.is_brilliant,
+        'comment': m.comment
+    } for m in moves])

@@ -733,29 +733,6 @@ async function saveGame(pgn, white, black, result) {
   }
 }
 
-async function saveAnalysis() {
-  try {
-    // Get user data from localStorage or API
-    const userData = await getUserData();
-
-    // Check if we have valid user data
-    if (!userData) {
-      console.error("No user data available - cannot save game");
-      return { error: "User not authenticated" };
-    }
-
-    // Extract user ID - handle both user_id and id properties
-    const userId = userData.user_id || userData.id;
-    if (!userId) {
-      console.error("User ID not found in user data");
-      return { error: "Invalid user data" };
-    } 
-  } catch (error) {
-    console.error("Error saving analysis:", error);
-    return { error: error.message };
-  }
-}
-
 // Helper function to update the state of the Previous and Next buttons
 function updateNavigationButtons() {
   if (currentMoveIndex <= 0) {

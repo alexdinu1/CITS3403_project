@@ -31,7 +31,7 @@ def get_player_stats_by_id(user_id):
 @stats_bp.route('/api/game_analysis/<int:game_id>')
 def get_game_analysis(game_id):
     try:
-        # First check if game exists and is analyzed
+        # First check if game exists
         game = Game.query.get(game_id)
         if not game:
             return jsonify({'error': 'Game not found'}), 404
@@ -40,42 +40,29 @@ def get_game_analysis(game_id):
         if not game.analyzed:
             return jsonify({'error': 'Game not analyzed yet'}), 404
             
-        # Get all analysis for this game, ordered by move number
-        analysis = GameAnalysis.query.filter_by(game_id=game_id)\
-                          .order_by(GameAnalysis.move_number)\
-                          .all()
+        # Get all moves with analysis for this game
+        moves = Move.query.filter_by(game_id=game_id)\
+                         .order_by(Move.move_number)\
+                         .all()
         
-        if not analysis:
-            return jsonify({'error': 'No analysis found for this game'}), 404
+        if not moves:
+            return jsonify({'error': 'No moves found for this game'}), 404
             
-        # Format the analysis data for response
+        # Format the move data for response
         analysis_data = [{
-            'move_number': a.move_number,
-            'score': a.score,
-            'is_blunder': a.is_blunder,
-            'is_brilliant': a.is_brilliant,
-            'comment': a.comment,
-            'fen': get_fen_for_move(game, a.move_number)  # Helper function to get FEN
-        } for a in analysis]
+            'move_number': m.move_number,
+            'score': m.score,
+            'is_blunder': m.is_blunder,
+            'is_brilliant': m.is_brilliant,
+            'comment': m.comment,
+            'fen': m.game_state  # Use game_state instead of get_fen_for_move
+        } for m in moves]
 
         return jsonify(analysis_data)
         
     except Exception as e:
         print(f"Error in get_game_analysis: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
-@stats_bp.route('/save_analysis', methods=['POST'])
-def save_analysis():
-    data = request.json
-    game_id = data.get('game_id')
-    move_number = data.get('move_number')
-    score = data.get('score')
-    is_blunder = data.get('is_blunder')
-    is_brilliant = data.get('is_brilliant')
-    comment = data.get('comment')
-
-    if not game_id or not move_number or not score or not is_blunder or not is_brilliant or not comment:
-        return jsonify({'error': 'Missing required fields'}), 400
 
 def get_fen_for_move(game, move_number):
     """
