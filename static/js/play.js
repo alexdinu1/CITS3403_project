@@ -198,18 +198,6 @@ async function playAIMove() {
         currentMoveIndex++;
         updateNavigationButtons();
 
-        // Record the AI move
-        // const userData = await getUserData();
-        // if (userData && userData.current_game_id) {
-        //   await recordAIMove(
-        //     userData.current_game_id,
-        //     aiMove,
-        //     fenBefore,
-        //     game.fen(),
-        //     aiResponse.evaluation
-        //   );
-        // }
-
         // Check for checkmate
         if (game.in_checkmate()) {
           setTimeout(() => {
@@ -419,16 +407,22 @@ async function onSquareClick(square) {
               ? `${move.from}${move.to}${move.promotion}`
               : `${move.from}${move.to}`;
             evaluatePlayerMove(fenBefore, uciMove);
-            
+
             // Evaluate the position after the player's move
-            const evaluation = await getEvaluation(gameState);
+            const evalMoveResponse = await fetch("/evaluate_move", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ fen_before: fenBefore, move: uciMove }),
+            });
+            const evalMoveData = await evalMoveResponse.json();
+            const score = evalMoveData.score ?? 0;
 
             // Record the player move
             pendingMoves.push({
               game_id: null, // Will be set after game is saved
               move_number: Math.ceil(game.history().length / 2),
               game_state: gameState,
-              score: evaluation,
+              score: score,
               is_blunder: false,
               is_brilliant: false,
               comment: ""
@@ -439,87 +433,80 @@ async function onSquareClick(square) {
             currentMoveIndex++;
             updateNavigationButtons();
 
-            playAIMove();
+            // Check for checkmate or draw before triggering AI move
+            if (game.in_checkmate()) {
+              setTimeout(() => {
+                showCheckmateOptions(); // Show the checkmate options modal
+              }, 500); // Delay to ensure the move is visually updated first
+            } else if (game.in_draw && game.in_draw()) {
+              setTimeout(() => {
+                showDrawModal(); // Show the draw modal
+              }, 500);
+            } else {
+              playAIMove();
+            }
 
             $("#promotionModal").modal("hide");
           });
+      } else {
+        const move = game.move({
+          from: selectedSquare,
+          to: square,
+        });
 
-        return; // Stop here, wait for modal choice
-      }
+        if (move === null) {
+          selectedSquare = null;
+          removeHighlights();
+          return;
+        }
 
-      // If no promotion, normal move execution
-      const move = game.move({
-        from: selectedSquare,
-        to: square,
-      });
-
-      if (move === null) {
+        $("#moveText").html(
+          `<span class="black-text">Moved from <b>${move.from}</b> to <b>${move.to}</b></span>`
+        );
+        board1.position(game.fen());
         selectedSquare = null;
         removeHighlights();
-        return;
-      }
 
-      $("#moveText").html(
-        `<span class="black-text">Moved from <b>${move.from}</b> to <b>${move.to}</b></span>`
-      );
-      board1.position(game.fen());
-      selectedSquare = null;
-      removeHighlights();
+        const gameState = game.fen();
+        const uciMove = `${move.from}${move.to}`;
+        evaluatePlayerMove(fenBefore, uciMove);
 
-      const gameState = game.fen();
-      const uciMove = move.promotion
-        ? `${move.from}${move.to}${move.promotion}`
-        : `${move.from}${move.to}`;
-
-      // Use /evaluate_move to get the 0-10 score and feedback
-      try {
-        const evalResponse = await fetch("/evaluate_move", {
+        // Evaluate the position after the player's move
+        const evalMoveResponse = await fetch("/evaluate_move", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fen_before: fenBefore, move: uciMove }),
         });
-        const evalData = await evalResponse.json();
-        if (evalData.error) {
-          console.error("Error evaluating move:", evalData.error);
+        const evalMoveData = await evalMoveResponse.json();
+        const score = evalMoveData.score ?? 0;
+
+        pendingMoves.push({
+          game_id: null,
+          move_number: Math.ceil(game.history().length / 2),
+          game_state: gameState,
+          score: score,
+          is_blunder: false,
+          is_brilliant: false,
+          comment: ""
+        });
+
+        moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
+        moveHistory.push(gameState);
+        currentMoveIndex++;
+        updateNavigationButtons();
+
+        // Check for checkmate or draw before triggering AI move
+        if (game.in_checkmate()) {
+          setTimeout(() => {
+            showCheckmateOptions();
+          }, 500);
+        } else if (game.in_draw && game.in_draw()) {
+          setTimeout(() => {
+            showDrawModal();
+          }, 500);
         } else {
-          // Display the score and feedback
-          const { score, feedback } = evalData;
-          $("#scoreText").html(
-            `<span class="black-text"><b>Score:</b> ${score} – ${feedback}</span>`
-          );
-
-          // Record the player move with the correct 0-10 score
-          pendingMoves.push({
-            game_id: null, // Will be set after game is saved
-            move_number: Math.ceil(game.history().length / 2),
-            game_state: gameState,
-            score: score, // <-- Use the 0-10 score from /evaluate_move
-            is_blunder: false,
-            is_brilliant: false,
-            comment: ""
-          });
+          playAIMove();
         }
-      } catch (error) {
-        console.error("Error fetching evaluation:", error);
-      }
-
-      moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
-      moveHistory.push(game.fen());
-      currentMoveIndex++;
-      updateNavigationButtons();
-
-      // Check for checkmate
-      if (game.in_checkmate()) {
-        setTimeout(() => {
-          showCheckmateOptions(); // Show the checkmate options modal
-        }, 500);
-      } else if (game.in_draw && game.in_draw()) {
-        setTimeout(() => {
-          showDrawModal();
-        }, 500);
-      } else {
-        // Trigger AI move
-        playAIMove();
       }
     }
   } else {
@@ -587,9 +574,8 @@ $("#reset").click(() => {
 
 function setupPlayButton() {
   $(".container.text-center").html(`
-        <button id="playGame" class="btn btn-success btn-lg fs-3">Play Game</button>
-        <br>
-        <button class="btn btn-primary fs-3 m-4" id="backButton">Back</button>
+        <button id="playGame" class="btn btn-success btn-lg fs-5">Play Game</button>
+        <button class="btn btn-primary fs-5 m-4" id="backButton">Back</button>
     `);
 
   $("#playGame").click(() => {
@@ -651,18 +637,6 @@ async function startGame(difficulty) {
   // Create initial PGN with just the starting position
   const initialPgn = "[Event \"Casual Game\"]\n[Site \"Chess App\"]\n[Date \"" + new Date().toISOString().split('T')[0] + "\"]\n[White \"" + (boardOrientation === "white" ? "Player" : "AI") + "\"]\n[Black \"" + (boardOrientation === "white" ? "AI" : "Player") + "\"]\n[Result \"*\"]\n\n*";
 
-  // Save the game at the start
-  // const saveResponse = await saveGame(
-  //   initialPgn,
-  //   boardOrientation === "white" ? "Player" : "AI",
-  //   boardOrientation === "white" ? "AI" : "Player",
-  //   "*" // Game in progress
-  // );
-
-  // if (saveResponse.error) {
-  //   console.error("Failed to save initial game state:", saveResponse.error);
-  // }
-
   $("#difficultyButtons").fadeOut(() => {
     // Add the Resign button after difficulty buttons disappear
     $(".container.text-center").html(`
@@ -716,6 +690,7 @@ async function startGame(difficulty) {
     }
   });
 }
+
 
 async function saveGame(pgn, white, black, result) {
   try {
@@ -1012,7 +987,7 @@ function showResignationModal(result) {
 
     // Add event listeners for the buttons
     $(document).on('click', '#reviewGameButton', function() {
-        closeResignationModal(); // Close the modal, leave board as is
+      closeResignationModal(); // Close the modal, leave board as is
     });
 
     $(document).on('click', '#playAgainButton', function() {
@@ -1032,7 +1007,6 @@ function closeResignationModal() {
     $('#resignationModal').remove(); // Remove the modal from the DOM
 }
 
-// 1. Add a function to show the draw modal, similar to checkmate/resignation
 function showDrawModal() {
     // Remove the resign button and add new game/stats buttons if present
     $('#resignButton').replaceWith(`
@@ -1216,4 +1190,3 @@ async function saveAllMoves() {
     console.error('Error saving moves:', error);
   }
 }
-
