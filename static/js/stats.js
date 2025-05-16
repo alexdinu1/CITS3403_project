@@ -467,7 +467,7 @@ function initializeCharts(stats, analysis) {
   const lastPlayedCtx = document.getElementById('lastPlayedChart').getContext('2d');
   
   // Filter for moves with non-zero scores
-  const filteredAnalysis = analysis.filter(move => typeof move.score === 'number' && move.score !== 0);
+  const filteredAnalysis = analysis.filter(move => typeof move.score === 'number');
   const moveLabels = filteredAnalysis.map(move => move.move_number);
   const moveScores = filteredAnalysis.map(move => move.score);
 
@@ -527,7 +527,7 @@ function initializeCharts(stats, analysis) {
     }
   } else {
     // Fallback to sample data
-    averageScores = [5.2, 6.3, 6.1, 7.4, 6.5, 6.7, 7.8, 6.6, 6.2, 5.4];
+    averageScores = [];
   }
 
   // Average Chart
