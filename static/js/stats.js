@@ -308,10 +308,10 @@ async function shareStats(section) {
                     });
                 } catch (err) {
                     console.error('Share failed:', err);
-                    alert("Share functionality available on supported devices only.");
+                    alert("An error occurred when sharing the file.");
                 }
             } else {
-                alert("Sharing images is not supported on this device/browser.");
+                alert("An error occurred when sharing the file.");
             }
         }, 'image/png');
     } else {
@@ -322,7 +322,7 @@ async function shareStats(section) {
                 text: message + '\n\n' + statsContent
             }).catch(err => {
                 console.error('Share failed:', err);
-                alert("Share functionality available on supported devices only.");
+                alert("An error occurred when sharing the file.");
             });
         } else {
             alert(message + " Share functionality coming soon!");
