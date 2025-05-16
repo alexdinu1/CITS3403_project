@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models import db, Game, PlayerStats, GameAnalysis
+from models import db, Game, PlayerStats, Move
 import chess
 import chess.engine
 import platform
@@ -144,8 +144,14 @@ def evaluate_move():
             info_before = engine.analyse(board_before, chess.engine.Limit(depth=15))
             info_after = engine.analyse(board_after, chess.engine.Limit(depth=15))
 
-            score_before = info_before['score'].white()
-            score_after = info_after['score'].white()
+            turn = board_before.turn  # True for white, False for black
+
+            if turn:
+                score_before = info_before['score'].white()
+                score_after = info_after['score'].white()
+            else:
+                score_before = info_before['score'].black()
+                score_after = info_after['score'].black()
 
             def score_to_cp(score_obj):
                 if isinstance(score_obj, chess.engine.Cp):
@@ -210,29 +216,99 @@ def save_game():
     white = data.get('white')
     black = data.get('black')
     result = data.get('result')
+    user_id = data.get('user_id')  # Get user_id sent from frontend
 
     if not pgn or not white or not black or not result:
         return jsonify({'error': 'Missing required fields'}), 400
+        
+    if not user_id:
+        # If user_id is missing, just save the game without updating stats
+        try:
+            game = Game(
+                pgn=pgn,
+                white_player=white,
+                black_player=black,
+                result=result
+            )
+            db.session.add(game)
+            db.session.commit()
+            return jsonify({'status': 'success', 'game_id': game.id, 'warning': 'Game saved without user stats update'})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
 
     try:
+        # Create and add the game first
         game = Game(
             pgn=pgn,
             white_player=white,
             black_player=black,
             result=result,
-            date_played=None
+            user_id=user_id  # Set the user_id on the game
         )
         db.session.add(game)
+        db.session.flush()  # This assigns an ID to the game without committing
+
+        # Find or create player stats for this user
+        stats = PlayerStats.query.filter_by(user_id=user_id).first()
+        if not stats:
+            stats = PlayerStats(user_id=user_id, wins=0, losses=0, draws=0, rating=1200, highest_rating=1200)
+            db.session.add(stats)
+        
+        # Convert chess notation result to win/loss/draw status from the perspective of the current user
+        is_player_white = (white == "Player")
+        
+        # Update stats based on game result
+        if result == '1-0':  # White wins
+            if is_player_white:
+                stats.wins += 1
+                stats.rating += 10
+            else:
+                stats.losses += 1
+                stats.rating -= 8
+        elif result == '0-1':  # Black wins
+            if not is_player_white:
+                stats.wins += 1
+                stats.rating += 10
+            else:
+                stats.losses += 1
+                stats.rating -= 8
+        elif result == '1/2-1/2':  # Draw
+            stats.draws += 1
+            stats.rating += 2
+            
+        # Update highest rating if needed
+        if stats.rating > stats.highest_rating:
+            stats.highest_rating = stats.rating
+        
+        # Update last game reference
+        stats.last_game_id = game.id
+
         db.session.commit()
-        return jsonify({'status': 'success', 'game_id': game.id})
+        return jsonify({'game_status': 'success', 'game_id': game.id})
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
+@chess_bp.route('/update_game/<int:game_id>', methods=['POST'])
+def update_game(game_id):
+    data = request.json
+    result = data.get('result')
+    if not result:
+        return jsonify({'error': 'Missing result'}), 400
+
+    game = Game.query.get(game_id)
+    if not game:
+        return jsonify({'error': 'Game not found'}), 404
+
+    game.result = result
+    db.session.commit()
+    return jsonify({'status': 'success', 'game_id': game.id})
 
 @chess_bp.route('/player_stats/<player_name>')
 def get_player_stats_by_name(player_name):
     stats = PlayerStats.query.join(Game, PlayerStats.last_game_id == Game.id, isouter=True) \
-        .join(GameAnalysis, Game.id == GameAnalysis.game_id, isouter=True) \
+        .join(Move, Game.id == Move.game_id, isouter=True) \
         .join(Game, PlayerStats.user_id == Game.user_id, isouter=True) \
         .filter(Game.white_player == player_name).first()
     if not stats:
@@ -263,9 +339,42 @@ def get_player_stats_by_id(user_id):
 
 @chess_bp.route('/api/game_analysis/<int:game_id>')
 def get_game_analysis(game_id):
-    analysis = GameAnalysis.query.filter_by(game_id=game_id).order_by(GameAnalysis.move_number).all()
+    moves = Move.query.filter_by(game_id=game_id).order_by(Move.move_number).all()
     return jsonify([{
-        'move_number': a.move_number,
-        'score': a.score,
-        'comment': a.comment
-    } for a in analysis])
+        'move_number': m.move_number,
+        'score': m.score,
+        'is_blunder': m.is_blunder,
+        'is_brilliant': m.is_brilliant,
+        'comment': m.comment
+    } for m in moves])
+    
+@chess_bp.route('/api/record_moves_batch', methods=['POST'])
+def record_moves_batch():
+    data = request.json
+    moves = data.get('moves', [])
+    if not moves or not isinstance(moves, list):
+        return jsonify({'error': 'No moves provided'}), 400
+    try:
+        move_objects = []
+        for move in moves:
+            # Clamp score to [0, 10] if needed
+            score = move.get('score', 0)
+            if not isinstance(score, (int, float)):
+                score = 0
+            score = max(0, min(10, score))
+            move_obj = Move(
+                game_id=move['game_id'],
+                move_number=move['move_number'],
+                game_state=move['game_state'],
+                score=score,
+                is_blunder=move.get('is_blunder', False),
+                is_brilliant=move.get('is_brilliant', False),
+                comment=move.get('comment', '')
+            )
+            move_objects.append(move_obj)
+        db.session.bulk_save_objects(move_objects)
+        db.session.commit()
+        return jsonify({'status': 'success', 'moves_saved': len(move_objects)})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

@@ -25,23 +25,24 @@ class Game(db.Model):
     black_player = db.Column(db.String(50))
     result = db.Column(db.String(10))
     date_played = db.Column(db.DateTime, default=datetime.utcnow)
-    analyzed = db.Column(db.Boolean, default=False)
     
     # Relationships
     moves = db.relationship('Move', backref='game', lazy=True, order_by='Move.move_number')
-    analysis = db.relationship('GameAnalysis', backref='game', lazy=True)
 
 class Move(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, db.ForeignKey('game.id'), nullable=False)
     move_number = db.Column(db.Integer, nullable=False)
-    san = db.Column(db.String(10))  # Standard Algebraic Notation
-    uci = db.Column(db.String(10))  # Universal Chess Interface
-    fen = db.Column(db.String(100))  # Board state after move
-    score = db.Column(db.Float)     # Evaluation score
+    game_state = db.Column(db.String(100))  # Board state after move
+
+    # Move analysis
+    score = db.Column(db.Float)
+    is_blunder = db.Column(db.Boolean, default=False)
+    is_brilliant = db.Column(db.Boolean, default=False)
+    comment = db.Column(db.Text)
     
     __table_args__ = (
-        Index('idx_game_move', 'game_id', 'move_number'),
+        Index('idx_analysis_blunders', 'game_id', 'is_blunder'),
     )
 
 class PlayerStats(db.Model):
@@ -71,16 +72,3 @@ class Friendship(db.Model):
     # Relationships
     user = db.relationship('User', foreign_keys=[user_id], backref='friendships_initiated')
     friend = db.relationship('User', foreign_keys=[friend_id], backref='friendships_received')
-
-class GameAnalysis(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    game_id = db.Column(db.Integer, db.ForeignKey('game.id'), nullable=False)
-    move_number = db.Column(db.Integer, nullable=False)
-    score = db.Column(db.Float)
-    is_blunder = db.Column(db.Boolean, default=False)
-    is_brilliant = db.Column(db.Boolean, default=False)
-    comment = db.Column(db.Text)
-    
-    __table_args__ = (
-        Index('idx_analysis_blunders', 'game_id', 'is_blunder'),
-    )

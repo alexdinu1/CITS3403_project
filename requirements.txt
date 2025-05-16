@@ -1,0 +1,7 @@
+# flask
+# flask migrate
+# flask cors
+
+# chess
+
+# initialise the database with "flask init-db"

@@ -280,7 +280,21 @@ function createFriendCard(friend, stats) {
     
     // Set up action buttons
     const viewBtn = card.querySelector('[data-action="view"]');
-    viewBtn.addEventListener('click', () => {
+    viewBtn.addEventListener('click', async () => {
+        const userData = await getUserData();
+        if (!userData || !userData.user_id) {
+            showAlert('You must be logged in to view stats.', 'warning');
+            return;
+        }
+        // Check friendship before navigating
+        const friendshipResponse = await fetch(`/api/get_friendship?user_id=${userData.user_id}&friend_id=${friend.id}`);
+        const friendship = await friendshipResponse.json();
+
+        if (!friendship || friendship.status !== 'accepted') {
+            showAlert('Please friend this user to view their stats.', 'warning');
+            return;
+        }
+        // Only navigate if friends
         window.location.href = `/friend_stats/${friend.id}`;
     });
     
@@ -377,7 +391,19 @@ function createSuggestionCard(player) {
     const viewBtn = document.createElement('button');
     viewBtn.className = 'btn btn-sm btn-outline-primary';
     viewBtn.innerHTML = '<i class="bi bi-graph-up"></i>';
-    viewBtn.addEventListener('click', () => {
+    viewBtn.addEventListener('click', async () => {
+        const userData = await getUserData();
+        if (!userData || !userData.user_id) {
+            showAlert('You must be logged in to view stats.', 'warning');
+            return;
+        }
+        const friendshipResponse = await fetch(`/api/get_friendship?user_id=${userData.user_id}&friend_id=${player.id}`);
+        const friendship = await friendshipResponse.json();
+
+        if (!friendship || friendship.status !== 'accepted') {
+            showAlert('Please friend this user to view their stats.', 'warning');
+            return;
+        }
         window.location.href = `/friend_stats/${player.id}`;
     });
     
