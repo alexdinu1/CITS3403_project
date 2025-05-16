@@ -12,13 +12,94 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <!-- Add Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+      body, .container, .container * {
+        color: #fff !important;
+        background-color: #222 !important;
+      }
+
+      .card, .modal-content {
+        background-color: #222 !important;
+        color: #fff !important;
+      }
+      a {
+        color: #aad !important;
+      }
+      /* Align all list text to the left */
+      ul, ol {
+        text-align: left !important;
+      }
+      ul li, ol li {
+        text-align: left !important;
+      }
+      /* Add larger gap between sections */
+      .info-section {
+        margin-bottom: 3rem !important;
+      }
+      /* Underline and align all h3 headings to the left */
+      h3 {
+        text-decoration: underline;
+        text-underline-offset: 6px;
+        text-align: left !important;
+      }
+      .btn, .btn-primary, .btn-secondary {
+        color: inherit !important;
+        background-color: inherit !important;
+        border-color: inherit !important;
+      }
+    </style>
   </head>
   <body>
-    <div class="container text-center mt-5">
-      <h1 class="fw-bold mb-4">How to Play Chess</h1>
-      <p class="lead">Chess is a strategy game played between two players. The goal is to checkmate your opponent's king.</p>
-      <p class="mb-4">Learn more about the rules and strategies online!</p>
-      <div class="d-flex justify-content-center gap-3">
+    <div class="container mt-2">
+      <h1 class="fw-bold mb-4 text-center">How to Use AI Chess</h1>
+      <div class="mb-4 info-section">
+        <p class="lead">
+          Welcome to AI Chess! Here, you play chess against a powerful AI opponent powered by Stockfish. The platform is designed to help you improve your chess skills, analyze your games, and track your progress over time.
+        </p>
+      </div>
+      <div class="mb-4 info-section">
+        <h3>Game Modes & Customization</h3>
+        <ul>
+          <li><strong>Player vs AI:</strong> Every game is played against the AI. You can choose to play as White or Black.</li>
+          <li><strong>Difficulty Levels:</strong> Select from Easy, Medium, or Hard AI difficulty before each game. The AI adapts its strength and depth of calculation accordingly.</li>
+          <li><strong>Move Input:</strong> Click on the board to select and move pieces. Pawn promotions are supported with a choice of piece.</li>
+          <li><strong>Custom Board Setup:</strong> Before starting a game, you can set up the board in any position you like to practice openings, endgames, or specific scenarios.</li>
+        </ul>
+      </div>
+      <div class="mb-4 info-section">
+        <h3>Scoring System</h3>
+        <ul>
+          <li><strong>Move Scoring:</strong> Every move you make is evaluated by the AI and given a score from <b>0 to 10</b>, where 10 is the best possible move and 0 is a blunder.</li>
+          <li><strong>Score Calculation:</strong> The score reflects how close your move is to the optimal move in the position, based on the AI's analysis.</li>
+          <li><strong>Game Analysis:</strong> After each game, you can view a graph of your move scores, see your best and worst moves, and get personalized insights.</li>
+        </ul>
+      </div>
+      <div class="mb-4 info-section">
+        <h3>Statistics & Insights</h3>
+        <ul>
+          <li><strong>Performance Tracking:</strong> Your stats page shows your win/loss/draw record, rating, and average move quality.</li>
+          <li><strong>Game Review:</strong> After each game, review your moves, see which were brilliant or blunders, and get suggestions for improvement.</li>
+          <li><strong>Sharing:</strong> Share your stats and game analysis with friends directly from the platform.</li>
+        </ul>
+      </div>
+      <div class="mb-4 info-section">
+        <h3>How to Get Started</h3>
+        <ol>
+          <li>Click <b>Play</b> to start a new game against the AI.</li>
+          <li>Choose your color and difficulty.</li>
+          <li>Make your moves by clicking on the board.</li>
+          <li>After the game, view your stats and analysis on the <b>Stats</b> page.</li>
+        </ol>
+      </div>
+      <div class="mb-4 info-section">
+        <h3>Tips</h3>
+        <ul>
+          <li>Try different difficulties to challenge yourself.</li>
+          <li>Review your move scores to identify areas for improvement.</li>
+          <li>Use the stats and insights to track your progress over time.</li>
+        </ul>
+      </div>
+      <div class="d-flex justify-content-center gap-3 mt-4">
         <button class="btn btn-primary" onclick="playGame()">Play</button>
         <button class="btn btn-secondary" onclick="viewStats()">View Stats</button>
         <button class="btn btn-primary" onclick="viewFriends()">Friends</button>
