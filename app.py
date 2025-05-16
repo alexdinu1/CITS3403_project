@@ -53,6 +53,9 @@ app.register_blueprint(stats_bp)
 app.register_blueprint(friends_bp)
 app.register_blueprint(move_bp)
 
+# Exempt API blueprints from CSRF (for JSON endpoints)
+csrf.exempt(auth_bp)
+
 # CLI command to initialize the database
 @app.cli.command('init-db')
 def init_db():

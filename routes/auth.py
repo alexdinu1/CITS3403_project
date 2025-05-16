@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from models import db, User, PlayerStats
-from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_wtf.csrf import CSRFProtect
 
 auth_bp = Blueprint('auth', __name__)
 csrf = CSRFProtect()
