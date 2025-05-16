@@ -341,7 +341,7 @@ async function onSquareClick(square) {
         moves.map((m) => m.to)
       );
     } else {
-      const fenBefore = game.fen(); // Save FEN before the move
+      const fenBefore = game.fen();
       const pieceAtFrom = game.get(selectedSquare);
       const isPromotionSquare = square[1] === "8" || square[1] === "1";
       const isPawnPromotion =
@@ -470,21 +470,38 @@ async function onSquareClick(square) {
       const uciMove = move.promotion
         ? `${move.from}${move.to}${move.promotion}`
         : `${move.from}${move.to}`;
-      evaluatePlayerMove(fenBefore, uciMove);
 
-      // Evaluate the position after the player's move
-      const evaluation = await getEvaluation(gameState);
+      // Use /evaluate_move to get the 0-10 score and feedback
+      try {
+        const evalResponse = await fetch("/evaluate_move", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fen_before: fenBefore, move: uciMove }),
+        });
+        const evalData = await evalResponse.json();
+        if (evalData.error) {
+          console.error("Error evaluating move:", evalData.error);
+        } else {
+          // Display the score and feedback
+          const { score, feedback } = evalData;
+          $("#scoreText").html(
+            `<span class="black-text"><b>Score:</b> ${score} – ${feedback}</span>`
+          );
 
-      // Record the player move
-      pendingMoves.push({
-        game_id: null, // Will be set after game is saved
-        move_number: Math.ceil(game.history().length / 2),
-        game_state: gameState,
-        score: evaluation,
-        is_blunder: false,
-        is_brilliant: false,
-        comment: ""
-      });
+          // Record the player move with the correct 0-10 score
+          pendingMoves.push({
+            game_id: null, // Will be set after game is saved
+            move_number: Math.ceil(game.history().length / 2),
+            game_state: gameState,
+            score: score, // <-- Use the 0-10 score from /evaluate_move
+            is_blunder: false,
+            is_brilliant: false,
+            comment: ""
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching evaluation:", error);
+      }
 
       moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
       moveHistory.push(game.fen());
@@ -495,7 +512,7 @@ async function onSquareClick(square) {
       if (game.in_checkmate()) {
         setTimeout(() => {
           showCheckmateOptions(); // Show the checkmate options modal
-        }, 500); // Delay to ensure the move is visually updated first
+        }, 500);
       } else if (game.in_draw && game.in_draw()) {
         setTimeout(() => {
           showDrawModal();
@@ -1199,3 +1216,4 @@ async function saveAllMoves() {
     console.error('Error saving moves:', error);
   }
 }
+

@@ -497,8 +497,13 @@ function initializeCharts(stats, analysis) {
             y: {
                 title: {
                     display: true,
-                    text: 'Evaluation (centipawns)'
+                    text: 'Move Score (0–10)' // <-- UPDATED LABEL
                 },
+                min: 0,
+                max: 10,
+                ticks: {
+                    stepSize: 1
+                }
             }
         }
     }
@@ -548,15 +553,10 @@ function initializeCharts(stats, analysis) {
 function getChartOptions(xAxisTitle) {
   return {
       responsive: true,
-      maintainAspectRatio: false,
       plugins: {
           legend: {
               display: true,
               position: 'top'
-          },
-          tooltip: {
-              mode: 'index',
-              intersect: false,
           }
       },
       scales: {
@@ -564,24 +564,19 @@ function getChartOptions(xAxisTitle) {
               title: {
                   display: true,
                   text: xAxisTitle
-              },
-              grid: {
-                  display: false
               }
           },
           y: {
               title: {
                   display: true,
-                  text: 'Score'
+                  text: 'Move Score (0–10)' // Updated label
               },
-              grid: {
-                  color: 'rgba(0, 0, 0, 0.1)'
+              min: 0,
+              max: 10,
+              ticks: {
+                  stepSize: 1
               }
           }
-      },
-      animation: {
-          duration: 1000,
-          easing: 'easeOutQuart'
       }
   };
 }

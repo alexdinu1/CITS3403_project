@@ -351,14 +351,19 @@ def record_moves_batch():
     try:
         move_objects = []
         for move in moves:
+            # Clamp score to [0, 10] if needed
+            score = move.get('score', 0)
+            if not isinstance(score, (int, float)):
+                score = 0
+            score = max(0, min(10, score))
             move_obj = Move(
                 game_id=move['game_id'],
                 move_number=move['move_number'],
                 game_state=move['game_state'],
-                score=move.get('score',0),
-                is_blunder=move.get('is_blunder',False),
-                is_brilliant=move.get('is_brilliant',False),
-                comment=move.get('comment','')
+                score=score,
+                is_blunder=move.get('is_blunder', False),
+                is_brilliant=move.get('is_brilliant', False),
+                comment=move.get('comment', '')
             )
             move_objects.append(move_obj)
         db.session.bulk_save_objects(move_objects)
