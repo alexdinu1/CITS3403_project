@@ -270,7 +270,7 @@ function displayPerformanceInsights(stats) {
 document.addEventListener('DOMContentLoaded', initializeStatsPage);
 
 // Update shareStats to use the global variables
-function shareStats(section) {
+async function shareStats(section) {
     if (!currentUserId) {
         showAlert('Please wait while we load your data', 'warning');
         return;
@@ -279,23 +279,55 @@ function shareStats(section) {
     const message = section === 'lastPlayed' 
         ? `${currentUsername}'s Last Played stats on AI Chess!` 
         : `${currentUsername}'s Average stats on AI Chess!`;
-  
-  // Create shareable content
-  const statsElement = document.getElementById(section === 'lastPlayed' ? 'lastPlayedStats' : 'averageStats');
-  const chartElement = document.getElementById(section === 'lastPlayed' ? 'lastPlayedChart' : 'averageChart');
-  const statsContent = statsElement.innerText;
-  
-  if (navigator.share) {
-    navigator.share({
-      title: 'AI Chess Stats',
-      text: message + '\n\n' + statsContent
-    }).catch(err => {
-      console.error('Share failed:', err);
-      alert("Share functionality available on supported devices only.");
-    });
-  } else {
-    alert(message + " Share functionality coming soon!");
-  }
+
+    const chartId = section === 'lastPlayed' ? 'lastPlayedChart' : 'averageChart';
+    const chartElement = document.getElementById(chartId);
+
+    // Get the text content to share
+    const statsElement = document.getElementById(section === 'lastPlayed' ? 'lastPlayedStats' : 'averageStats');
+    const statsContent = statsElement ? statsElement.innerText : '';
+
+    const chartHasData = chartElement && chartElement.getContext('2d') && chartElement.getContext('2d').getImageData(0,0,chartElement.width, chartElement.height).data.some(pixel => pixel !== 0);
+
+    if (!statsContent || !chartHasData) {
+      showAlert('No stats available to share. Please play a game first!', 'warning');
+      return;
+    }
+
+    // Convert chart to blob and share both image and text
+    if (navigator.canShare && window.OffscreenCanvas) {
+        chartElement.toBlob(async function(blob) {
+            const file = new File([blob], 'stats.png', { type: 'image/png' });
+
+            if (navigator.canShare({ files: [file], text: message + '\n\n' + statsContent })) {
+                try {
+                    await navigator.share({
+                        title: 'AI Chess Stats',
+                        text: message + '\n\n' + statsContent,
+                        files: [file]
+                    });
+                } catch (err) {
+                    console.error('Share failed:', err);
+                    alert("An error occurred when sharing the file.");
+                }
+            } else {
+                alert("An error occurred when sharing the file.");
+            }
+        }, 'image/png');
+    } else {
+        // Fallback: share text only
+        if (navigator.share) {
+            navigator.share({
+                title: 'AI Chess Stats',
+                text: message + '\n\n' + statsContent
+            }).catch(err => {
+                console.error('Share failed:', err);
+                alert("An error occurred when sharing the file.");
+            });
+        } else {
+            alert(message + " Share functionality coming soon!");
+        }
+    }
 }
 
 // Generate dynamic insights based on game data
