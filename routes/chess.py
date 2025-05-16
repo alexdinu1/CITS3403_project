@@ -327,3 +327,29 @@ def generate_comment(score):
         return "Slight disadvantage."
     else:
         return "Significant disadvantage."
+    
+@chess_bp.route('/api/record_moves_batch', methods=['POST'])
+def record_moves_batch():
+    data = request.json
+    moves = data.get('moves', [])
+    if not moves or not isinstance(moves, list):
+        return jsonify({'error': 'No moves provided'}), 400
+    try:
+        move_objects = []
+        for move in moves:
+            move_obj = Move(
+                game_id=move['game_id'],
+                move_number=move['move_number'],
+                game_state=move['game_state'],
+                score=move.get('score',0),
+                is_blunder=move.get('is_blunder',False),
+                is_brilliant=move.get('is_brilliant',False),
+                comment=move.get('comment','')
+            )
+            move_objects.append(move_obj)
+        db.session.bulk_save_objects(move_objects)
+        db.session.commit()
+        return jsonify({'status': 'success', 'moves_saved': len(move_objects)})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

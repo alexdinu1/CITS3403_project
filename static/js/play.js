@@ -11,6 +11,7 @@ let moveHistory = []; // Track the history of FEN positions
 let currentMoveIndex = 0; // Track the current position in the history
 let moveRecordingQueue = [];
 let isProcessingQueue = [];
+let pendingMoves = [];
 
 // Initialize board with custom click-to-move interaction
 function initializeBoard(orientation) {
@@ -198,16 +199,16 @@ async function playAIMove() {
         updateNavigationButtons();
 
         // Record the AI move
-        const userData = await getUserData();
-        if (userData && userData.current_game_id) {
-          await recordAIMove(
-            userData.current_game_id,
-            aiMove,
-            fenBefore,
-            game.fen(),
-            aiResponse.evaluation
-          );
-        }
+        // const userData = await getUserData();
+        // if (userData && userData.current_game_id) {
+        //   await recordAIMove(
+        //     userData.current_game_id,
+        //     aiMove,
+        //     fenBefore,
+        //     game.fen(),
+        //     aiResponse.evaluation
+        //   );
+        // }
 
         // Check for checkmate
         if (game.in_checkmate()) {
@@ -414,12 +415,20 @@ async function onSquareClick(square) {
               ? `${move.from}${move.to}${move.promotion}`
               : `${move.from}${move.to}`;
             evaluatePlayerMove(fenBefore, uciMove);
+            
+            // Evaluate the position after the player's move
+            const evaluation = await getEvaluation(gameState);
 
             // Record the player move
-            const userData = await getUserData();
-            if (userData && userData.current_game_id) {
-              await recordMove(userData.current_game_id, gameState);
-            }
+            pendingMoves.push({
+              game_id: null, // Will be set after game is saved
+              move_number: Math.ceil(game.history().length / 2),
+              game_state: gameState,
+              score: evaluation,
+              is_blunder: false,
+              is_brilliant: false,
+              comment: ""
+            });
 
             moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
             moveHistory.push(gameState);
@@ -459,11 +468,19 @@ async function onSquareClick(square) {
         : `${move.from}${move.to}`;
       evaluatePlayerMove(fenBefore, uciMove);
 
+      // Evaluate the position after the player's move
+      const evaluation = await getEvaluation(gameState);
+
       // Record the player move
-      const userData = await getUserData();
-      if (userData && userData.current_game_id) {
-        await recordMove(userData.current_game_id, gameState);
-      }
+      pendingMoves.push({
+        game_id: null, // Will be set after game is saved
+        move_number: Math.ceil(game.history().length / 2),
+        game_state: gameState,
+        score: evaluation,
+        is_blunder: false,
+        is_brilliant: false,
+        comment: ""
+      });
 
       moveHistory = moveHistory.slice(0, currentMoveIndex + 1);
       moveHistory.push(game.fen());
@@ -610,16 +627,16 @@ async function startGame(difficulty) {
   const initialPgn = "[Event \"Casual Game\"]\n[Site \"Chess App\"]\n[Date \"" + new Date().toISOString().split('T')[0] + "\"]\n[White \"" + (boardOrientation === "white" ? "Player" : "AI") + "\"]\n[Black \"" + (boardOrientation === "white" ? "AI" : "Player") + "\"]\n[Result \"*\"]\n\n*";
 
   // Save the game at the start
-  const saveResponse = await saveGame(
-    initialPgn,
-    boardOrientation === "white" ? "Player" : "AI",
-    boardOrientation === "white" ? "AI" : "Player",
-    "*" // Game in progress
-  );
+  // const saveResponse = await saveGame(
+  //   initialPgn,
+  //   boardOrientation === "white" ? "Player" : "AI",
+  //   boardOrientation === "white" ? "AI" : "Player",
+  //   "*" // Game in progress
+  // );
 
-  if (saveResponse.error) {
-    console.error("Failed to save initial game state:", saveResponse.error);
-  }
+  // if (saveResponse.error) {
+  //   console.error("Failed to save initial game state:", saveResponse.error);
+  // }
 
   $("#difficultyButtons").fadeOut(() => {
     // Add the Resign button after difficulty buttons disappear
@@ -856,16 +873,33 @@ async function showCheckmateOptions() {
   const winner = game.turn() === "w" ? "Black" : "White";
   const result = winner === 'White' ? '1-0' : '0-1';
 
-  // Save the game result before showing the modal
-  const userData = await getUserData();
-    if (userData && userData.current_game_id) {
-      await updateGameResult(userData.current_game_id, result);
+  // Save the game only now, when it's finished
+  const saveResponse = await saveGame(
+    game.pgn(),
+    boardOrientation === "white" ? "Player" : "AI",
+    boardOrientation === "white" ? "AI" : "Player",
+    result
+  );
+
+  if (saveResponse && saveResponse.game_id) {
+    // Update userData with the new game_id
+    const userData = await getUserData();
+    if (userData) {
+      userData.current_game_id = saveResponse.game_id;
+      localStorage.setItem("user", JSON.stringify(userData));
     }
 
+    // Now update all pendingMoves with the correct game_id
+    pendingMoves.forEach(m => m.game_id = saveResponse.game_id);
+
+    // Save all moves to the database
+    await saveAllMoves();
+  }
+
   $("#resignButton").replaceWith(`
-        <button id="newGameButton" class="btn btn-success mt-3 fs-5">New Game</button>
-        <button id="viewStatsButton" class="btn btn-secondary mt-3 fs-5">View Stats</button>
-    `);
+      <button id="newGameButton" class="btn btn-success mt-3 fs-5">New Game</button>
+      <button id="viewStatsButton" class="btn btn-secondary mt-3 fs-5">View Stats</button>
+  `);
 
   // Create a modal dialog for checkmate options
   const modalHtml = `
@@ -907,7 +941,7 @@ function closeCheckmateModal() {
   $("#checkmateModal").remove(); // Remove the modal from the DOM
 }
 
-async function recordMove(gameId, gameState) {
+async function recordMove(gameId, gameState, score) {
   if (!gameId) {
     console.warn("No game ID available - move recording queued for later");
     moveRecordingQueue.push(gameState);
@@ -925,9 +959,9 @@ async function recordMove(gameId, gameState) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         game_id: gameId,
-        move_number: game.history().length,
+        move_number: Math.ceil(game.history().length / 2),
         game_state: gameState,
-        score: 0, // Will be updated by analysis
+        score: score, // Will be updated by analysis
         is_blunder: false,
         is_brilliant: false,
         comment: ""
@@ -1023,5 +1057,20 @@ function showRecordingStatus(status) {
       break;
     default:
       statusElement.text("");
+  }
+}
+
+async function saveAllMoves() {
+  if (pendingMoves.length === 0) return;
+  try {
+    const response = await fetch('/api/record_moves_batch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({moves: pendingMoves})
+    });
+    if (!response.ok) throw new Error('Failed to save moves');
+    pendingMoves = [];
+  } catch (error) {
+    console.error('Error saving moves:', error);
   }
 }

@@ -499,11 +499,6 @@ function initializeCharts(stats, analysis) {
                     display: true,
                     text: 'Evaluation (centipawns)'
                 },
-                min: -1000,
-                max: 1000,
-                ticks: {
-                    stepSize: 200
-                }
             }
         }
     }
@@ -578,11 +573,6 @@ function getChartOptions(xAxisTitle) {
               title: {
                   display: true,
                   text: 'Score'
-              },
-              min: -1000,
-              max: 1000,
-              ticks: {
-                  stepSize: 200
               },
               grid: {
                   color: 'rgba(0, 0, 0, 0.1)'
