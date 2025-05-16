@@ -133,19 +133,25 @@ def evaluate_move():
         board_after.push(move)
 
         with chess.engine.SimpleEngine.popen_uci(get_stockfish_path()) as engine:
+            # Check if the player checkmated the AI
             if board_after.is_checkmate():
                 return jsonify({
+                    'cpl': 0,
                     'score': 10,
-                    'is_blunder': False,
-                    'is_brilliant': True,
-                    'comment': "Checkmate! You won the game."
+                    'feedback': "Checkmate! You won the game."
                 })
 
             info_before = engine.analyse(board_before, chess.engine.Limit(depth=15))
             info_after = engine.analyse(board_after, chess.engine.Limit(depth=15))
 
-            score_before = info_before['score'].white()
-            score_after = info_after['score'].white()
+            turn = board_before.turn  # True for white, False for black
+
+            if turn:
+                score_before = info_before['score'].white()
+                score_after = info_after['score'].white()
+            else:
+                score_before = info_before['score'].black()
+                score_after = info_after['score'].black()
 
             def score_to_cp(score_obj):
                 if isinstance(score_obj, chess.engine.Cp):
@@ -158,17 +164,46 @@ def evaluate_move():
 
             eval_before = score_to_cp(score_before)
             eval_after = score_to_cp(score_after)
+
             cpl = abs(eval_before - eval_after)
 
-            # Determine if move is a blunder or brilliant
-            is_blunder = cpl > 200  # More than 2 pawns lost
-            is_brilliant = cpl > 300 and eval_after > eval_before  # Gained more than 3 pawns
+            if score_after.is_mate():
+                mate_val = score_after.mate()
+                if mate_val > 0:
+                    feedback = f"You're delivering mate in {mate_val}"
+                    score_value = 10
+                else:
+                    feedback = f"Opponent has mate in {abs(mate_val)}"
+                    score_value = 0
+            elif score_before.is_mate():
+                mate_val = score_before.mate()
+                if mate_val > 0:
+                    feedback = f"You were delivering mate in {mate_val}, don't miss it!"
+                    score_value = 5
+                else:
+                    feedback = f"Opponent was mating in {abs(mate_val)}, stay alert!"
+                    score_value = 1
+            else:
+                if cpl == 0:
+                    feedback = "Best move!"
+                    score_value = 10
+                elif cpl < 50:
+                    feedback = "Good move."
+                    score_value = 8
+                elif cpl < 150:
+                    feedback = "Inaccuracy."
+                    score_value = 5
+                elif cpl < 400:
+                    feedback = "Mistake."
+                    score_value = 3
+                else:
+                    feedback = "Blunder!"
+                    score_value = 0
 
             return jsonify({
-                'score': eval_after,
-                'is_blunder': is_blunder,
-                'is_brilliant': is_brilliant,
-                'comment': generate_comment(eval_after)
+                'cpl': cpl,
+                'score': score_value,
+                'feedback': feedback
             })
 
     except Exception as e:
@@ -312,21 +347,6 @@ def get_game_analysis(game_id):
         'is_brilliant': m.is_brilliant,
         'comment': m.comment
     } for m in moves])
-
-def generate_comment(score):
-    """Generate a comment based on the move's score."""
-    if score > 300:
-        return "Excellent tactical play."
-    elif score > 100:
-        return "Maintaining advantage."
-    elif score > 0:
-        return "Slightly better position."
-    elif score > -100:
-        return "Position is equal."
-    elif score > -300:
-        return "Slight disadvantage."
-    else:
-        return "Significant disadvantage."
     
 @chess_bp.route('/api/record_moves_batch', methods=['POST'])
 def record_moves_batch():
@@ -337,14 +357,19 @@ def record_moves_batch():
     try:
         move_objects = []
         for move in moves:
+            # Clamp score to [0, 10] if needed
+            score = move.get('score', 0)
+            if not isinstance(score, (int, float)):
+                score = 0
+            score = max(0, min(10, score))
             move_obj = Move(
                 game_id=move['game_id'],
                 move_number=move['move_number'],
                 game_state=move['game_state'],
-                score=move.get('score',0),
-                is_blunder=move.get('is_blunder',False),
-                is_brilliant=move.get('is_brilliant',False),
-                comment=move.get('comment','')
+                score=score,
+                is_blunder=move.get('is_blunder', False),
+                is_brilliant=move.get('is_brilliant', False),
+                comment=move.get('comment', '')
             )
             move_objects.append(move_obj)
         db.session.bulk_save_objects(move_objects)
