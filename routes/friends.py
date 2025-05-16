@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template
+from flask import Blueprint, abort, redirect, request, jsonify, render_template, session, url_for
 from models import db, User, Friendship, PlayerStats
 from datetime import datetime
 from sqlalchemy import func
@@ -169,4 +169,17 @@ def get_friendship():
 
 @friends_bp.route('/friend_stats/<int:friend_id>')
 def friend_stats(friend_id):
+    user_id = session.get('user_id')
+    if not user_id:
+        return redirect(url_for('index'))
+
+    is_friend = Friendship.query.filter(
+        ((Friendship.user_id == user_id) & (Friendship.friend_id == friend_id)) |
+        ((Friendship.user_id == friend_id) & (Friendship.friend_id == user_id)),
+        Friendship.status == 'accepted'
+    ).first()
+
+    if not is_friend:
+        return abort(403) 
+
     return render_template('friend_stats.html', friend_id=friend_id)
