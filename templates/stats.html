@@ -282,6 +282,8 @@
     <!-- Stats JS -->
     <script src="{{ url_for('static', filename='js/stats.js') }}"></script>
     <script>
+      window.csrfToken = "{{ csrf_token() }}";
+
       function viewInfo() {
         window.location.href = "{{ url_for('info') }}";
       }
