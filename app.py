@@ -55,6 +55,7 @@ app.register_blueprint(move_bp)
 
 # Exempt API blueprints from CSRF (for JSON endpoints)
 csrf.exempt(auth_bp)
+csrf.exempt(friends_bp)  # <--- ADD THIS LINE
 
 # CLI command to initialize the database
 @app.cli.command('init-db')
