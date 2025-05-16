@@ -157,6 +157,10 @@ async function playAIMove() {
                     setTimeout(() => {
                         showCheckmateOptions(); // Show the checkmate options modal
                     }, 500); // Delay to ensure the move is visually updated first
+                } else if (game.in_draw && game.in_draw()) {
+                    setTimeout(() => {
+                        showDrawModal(); // Show the draw modal
+                    }, 500);
                 }
             }
         }, 1000);
@@ -326,6 +330,10 @@ function onSquareClick(square) {
                 setTimeout(() => {
                     showCheckmateOptions(); // Show the checkmate options modal
                 }, 500); // Delay to ensure the move is visually updated first
+            } else if (game.in_draw && game.in_draw()) {
+                setTimeout(() => {
+                    showDrawModal(); // Show the draw modal
+                }, 500);
             } else {
                 // Trigger AI move
                 playAIMove();
@@ -668,21 +676,20 @@ function showCheckmateOptions() {
     $('body').append(modalHtml);
 
     // Add event listeners for the buttons
-    $('#reviewGameButton').click(() => {
+    $(document).on('click', '#reviewGameButton', function() {
         closeCheckmateModal(); // Close the modal
         // Do nothing, just leave the board as it is
     });
 
-    $('#playAgainButton').click(() => {
-        location.reload(); // Refresh the page to start a new game
-    }
-    );
-
-    $('#newGameButton').click(() => {
+    $(document).on('click', '#playAgainButton', function() {
         location.reload(); // Refresh the page to start a new game
     });
 
-    $('#viewStatsButton').click(() => {
+    $(document).on('click', '#newGameButton', function() {
+        location.reload(); // Refresh the page to start a new game
+    });
+
+    $(document).on('click', '#viewStatsButton', function() {
         window.location.href = '/stats'; // Redirect to stats page
     });
 }
@@ -723,23 +730,74 @@ function showResignationModal(result) {
     $('body').append(modalHtml);
 
     // Add event listeners for the buttons
-    $('#reviewGameButton').click(() => {
+    $(document).on('click', '#reviewGameButton', function() {
         closeResignationModal(); // Close the modal, leave board as is
     });
 
-    $('#playAgainButton').click(() => {
+    $(document).on('click', '#playAgainButton', function() {
         location.reload(); // Refresh the page to start a new game
     });
 
-    $('#newGameButton').click(() => {
+    $(document).on('click', '#newGameButton', function() {
         location.reload(); // Refresh the page to start a new game
     });
 
-    $('#viewStatsButton').click(() => {
+    $(document).on('click', '#viewStatsButton', function() {
         window.location.href = '/stats'; // Redirect to stats page
     });
 }
 
 function closeResignationModal() {
     $('#resignationModal').remove(); // Remove the modal from the DOM
+}
+
+// 1. Add a function to show the draw modal, similar to checkmate/resignation
+function showDrawModal() {
+    // Remove the resign button and add new game/stats buttons if present
+    $('#resignButton').replaceWith(`
+        <button id="newGameButton" class="btn btn-success mt-3 fs-5">New Game</button>
+        <button id="viewStatsButton" class="btn btn-secondary mt-3 fs-5">View Stats</button>
+    `);
+
+    // Create a modal dialog for draw
+    const modalHtml = `
+        <div id="drawModal" class="modal" tabindex="-1" role="dialog" style="display: block; background: rgba(0, 0, 0, 0.5);">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Draw!</h5>
+                    </div>
+                    <div class="modal-footer d-flex justify-content-center gap-2">
+                        <button id="reviewGameButton" class="btn btn-primary">Review Game</button>
+                        <button id="playAgainButton" class="btn btn-success">New Game</button>
+                        <button id="viewStatsButton" class="btn btn-secondary">View Stats</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Append the modal to the body
+    $('body').append(modalHtml);
+
+    // Add event listeners for the buttons
+    $(document).on('click', '#reviewGameButton', function() {
+        closeDrawModal(); // Close the modal, leave board as is
+    });
+
+    $(document).on('click', '#playAgainButton', function() {
+        location.reload(); // Refresh the page to start a new game
+    });
+
+    $(document).on('click', '#newGameButton', function() {
+        location.reload(); // Refresh the page to start a new game
+    });
+
+    $(document).on('click', '#viewStatsButton', function() {
+        window.location.href = '/stats'; // Redirect to stats page
+    });
+}
+
+function closeDrawModal() {
+    $('#drawModal').remove(); // Remove the modal from the DOM
 }
