@@ -144,8 +144,14 @@ def evaluate_move():
             info_before = engine.analyse(board_before, chess.engine.Limit(depth=15))
             info_after = engine.analyse(board_after, chess.engine.Limit(depth=15))
 
-            score_before = info_before['score'].white()
-            score_after = info_after['score'].white()
+            turn = board_before.turn  # True for white, False for black
+
+            if turn:
+                score_before = info_before['score'].white()
+                score_after = info_after['score'].white()
+            else:
+                score_before = info_before['score'].black()
+                score_after = info_after['score'].black()
 
             def score_to_cp(score_obj):
                 if isinstance(score_obj, chess.engine.Cp):
