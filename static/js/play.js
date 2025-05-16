@@ -96,7 +96,10 @@ async function getAIMove(fen) {
   try {
     const response = await fetch("/get_ai_move", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": window.csrfToken
+      },
       body: JSON.stringify({ fen, difficulty: selectedDifficulty }),
     });
 
@@ -124,7 +127,10 @@ async function getEvaluation(fen) {
   try {
     const response = await fetch("/get_evaluation", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "X-CSRFToken": window.csrfToken // <-- Add CSRF token
+      },
       body: JSON.stringify({ fen, difficulty: selectedDifficulty }),
     });
 
@@ -297,7 +303,10 @@ async function evaluatePlayerMove(fenBefore, move) {
   try {
     const response = await fetch("/evaluate_move", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "X-CSRFToken": window.csrfToken // <-- Add CSRF token
+      },
       body: JSON.stringify({ fen_before: fenBefore, move: move }),
     });
 
@@ -411,7 +420,10 @@ async function onSquareClick(square) {
             // Evaluate the position after the player's move
             const evalMoveResponse = await fetch("/evaluate_move", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { 
+                "Content-Type": "application/json",
+                "X-CSRFToken": window.csrfToken // <-- Add this line
+              },
               body: JSON.stringify({ fen_before: fenBefore, move: uciMove }),
             });
             const evalMoveData = await evalMoveResponse.json();
@@ -474,7 +486,10 @@ async function onSquareClick(square) {
         // Evaluate the position after the player's move
         const evalMoveResponse = await fetch("/evaluate_move", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "X-CSRFToken": window.csrfToken // <-- Add this line
+          },
           body: JSON.stringify({ fen_before: fenBefore, move: uciMove }),
         });
         const evalMoveData = await evalMoveResponse.json();
@@ -731,6 +746,7 @@ async function saveGame(pgn, white, black, result) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "X-CSRFToken": window.csrfToken // <-- Add this line
       },
       body: JSON.stringify({
         pgn: pgn,
@@ -767,7 +783,10 @@ async function updateGameResult(gameId, result) {
   try {
     const response = await fetch(`/update_game/${gameId}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "X-CSRFToken": window.csrfToken // <-- Add CSRF token
+      },
       body: JSON.stringify({ result }),
     });
     return await response.json();
@@ -1068,7 +1087,10 @@ async function recordMove(gameId, gameState, score) {
 
     const response = await fetch("/record_move", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "X-CSRFToken": window.csrfToken // <-- Add CSRF token
+      },
       body: JSON.stringify({
         game_id: gameId,
         move_number: Math.ceil(game.history().length / 2),
@@ -1116,7 +1138,10 @@ async function recordAIMove(gameId, move, fenBefore, fenAfter, evaluation) {
 
     const response = await fetch("/record_move", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "X-CSRFToken": window.csrfToken // <-- Add CSRF token
+      },
       body: JSON.stringify({
         game_id: gameId,
         move_number: game.history().length,
@@ -1177,7 +1202,10 @@ async function saveAllMoves() {
   try {
     const response = await fetch('/api/record_moves_batch', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': window.csrfToken // <-- Add CSRF token
+      },
       body: JSON.stringify({moves: pendingMoves})
     });
     if (!response.ok) throw new Error('Failed to save moves');

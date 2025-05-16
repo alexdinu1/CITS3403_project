@@ -6,6 +6,7 @@ from flask_cors import CORS
 from flask_migrate import Migrate
 from models import db
 import logging
+from flask_wtf import CSRFProtect
 
 # Import blueprints from routes
 from routes.auth import auth_bp
@@ -26,10 +27,11 @@ db_path = instance_path / 'app.db'
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.secret_key = os.environ.get("SECRET_KEY", "dev")
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-secret-key')
 
 db.init_app(app)
 migrate = Migrate(app, db)
+csrf = CSRFProtect(app)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

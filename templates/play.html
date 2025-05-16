@@ -127,6 +127,11 @@
 
 <body>
 
+  <!-- Add this in your <head> or before your main JS scripts -->
+  <script>
+    window.csrfToken = "{{ csrf_token() }}";
+  </script>
+
   <!-- Sidebar toggle button -->
   <button class="openbtn" onclick="toggleSidebar()">☰ Menu</button>
 
