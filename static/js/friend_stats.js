@@ -261,7 +261,7 @@ function displayPerformanceInsights(stats) {
 /**
  * Share stats functionality
  */
-function shareStats(section) {
+async function shareStats(section) {
     if (!friendId || !friendUsername) {
         showAlert('Please wait while we load the data', 'warning');
         return;
@@ -270,21 +270,54 @@ function shareStats(section) {
     const message = section === 'lastPlayed' 
         ? `${friendUsername}'s Last Played stats on AI Chess!` 
         : `${friendUsername}'s Average stats on AI Chess!`;
-  
-    // Create shareable content
+
+    const chartId = section === 'lastPlayed' ? 'lastPlayedChart' : 'averageChart';
+    const chartElement = document.getElementById(chartId);
+
+    // Get the text content to share
     const statsElement = document.getElementById(section === 'lastPlayed' ? 'lastPlayedStats' : 'averageStats');
-    const statsContent = statsElement.innerText;
-  
-    if (navigator.share) {
-        navigator.share({
-            title: 'AI Chess Stats',
-            text: message + '\n\n' + statsContent
-        }).catch(err => {
-            console.error('Share failed:', err);
-            alert("Share functionality available on supported devices only.");
-        });
+    const statsContent = statsElement ? statsElement.innerText : '';
+
+    const chartHasData = chartElement && chartElement.getContext('2d') && chartElement.getContext('2d').getImageData(0,0,chartElement.width, chartElement.height).data.some(pixel => pixel !== 0);
+
+    if (!statsContent || !chartHasData) {
+        showAlert('No stats available to share. Please play a game first!', 'warning');
+        return;
+    }
+
+    // Convert chart to blob and share both image and text
+    if (navigator.canShare && window.OffscreenCanvas) {
+        chartElement.toBlob(async function(blob) {
+            const file = new File([blob], 'stats.png', { type: 'image/png' });
+
+            if (navigator.canShare({ files: [file], text: message + '\n\n' + statsContent })) {
+                try {
+                    await navigator.share({
+                        title: 'AI Chess Stats',
+                        text: message + '\n\n' + statsContent,
+                        files: [file]
+                    });
+                } catch (err) {
+                    console.error('Share failed:', err);
+                    alert("Share functionality available on supported devices only.");
+                }
+            } else {
+                alert("Sharing images is not supported on this device/browser.");
+            }
+        }, 'image/png');
     } else {
-        alert(message + " Share functionality coming soon!");
+        // Fallback: share text only
+        if (navigator.share) {
+            navigator.share({
+                title: 'AI Chess Stats',
+                text: message + '\n\n' + statsContent
+            }).catch(err => {
+                console.error('Share failed:', err);
+                alert("Share functionality available on supported devices only.");
+            });
+        } else {
+            alert(message + " Share functionality coming soon!");
+        }
     }
 }
 
@@ -412,7 +445,7 @@ function initializeCharts(stats, analysis) {
     const lastPlayedCtx = document.getElementById('lastPlayedChart').getContext('2d');
   
     // Filter for moves with non-zero scores
-    const filteredAnalysis = analysis.filter(move => typeof move.score === 'number' && move.score !== 0);
+    const filteredAnalysis = analysis.filter(move => typeof move.score === 'number');
     const moveLabels = filteredAnalysis.map(move => move.move_number);
     const moveScores = filteredAnalysis.map(move => move.score);
 
@@ -468,7 +501,7 @@ function initializeCharts(stats, analysis) {
         }
     } else {
         // Fallback to sample data
-        averageScores = [5.2, 6.3, 6.1, 7.4, 6.5, 6.7, 7.8, 6.6, 6.2, 5.4];
+        averageScores = [];
     }
 
     // Average Chart
