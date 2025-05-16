@@ -319,10 +319,10 @@ async function evaluatePlayerMove(fenBefore, move) {
       return;
     }
 
-    // Display the score and comment
-    const { score, comment } = data;
+    // Display the score and feedback (not comment)
+    const { score, feedback } = data;
     $("#scoreText").html(
-      `<span class="black-text"><b>Score:</b> ${score} – ${comment}</span>`
+      `<span class="black-text"><b>Score:</b> ${score} – ${feedback}</span>`
     );
   } catch (error) {
     console.error("Error fetching evaluation:", error);
