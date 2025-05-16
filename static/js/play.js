@@ -613,11 +613,7 @@ function setupDifficultyButtons() {
 
   $("#backButton").click(() => {
     $("#difficultyButtons").fadeOut(() => {
-      $("#board1")
-        .parent()
-        .animate({ marginTop: "0" }, 500, () => {
-          setupPlayButton();
-        });
+        setupPlayButton();
       // Show sidebar and menu button when "Back" is clicked
       const sidebar = document.getElementById("mySidebar");
       const menuButton = document.querySelector(".openbtn");

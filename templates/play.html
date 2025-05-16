@@ -39,14 +39,11 @@
       padding-top: 70px;
       z-index: 1000;
       transition: transform 0.5s ease;
-      /* <<< ADD THIS */
       transform: translateX(0);
-      /* visible position */
     }
 
     .sidebar.closed {
       transform: translateX(-100%);
-      /* slide out to the left */
     }
 
     .sidebar button {
@@ -85,7 +82,7 @@
     .main-content {
       padding: 20px;
       margin-left: 0;
-      /* Ensure it doesn't get pushed by the sidebar */
+      transition: margin-top 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     #board1 {
@@ -104,6 +101,7 @@
     @media (max-width: 768px) {
       .main-content {
         padding: 10px;
+        margin-top: 60px;
       }
 
       #board1 {
@@ -114,8 +112,8 @@
         width: 100%;
         height: auto;
         position: fixed;
-        /* Keep it fixed for mobile as well */
         padding-top: 20px;
+        top: 50px;
       }
 
       .openbtn {
@@ -133,7 +131,7 @@
   <button class="openbtn" onclick="toggleSidebar()">☰ Menu</button>
 
   <!-- Sidebar -->
-  <div id="mySidebar" class="sidebar">
+  <div id="mySidebar" class="sidebar closed">
     <button onclick="window.location.href='info.html'">Home</button>
     <button onclick="window.location.href='stats.html'">Player Stats</button>
     <button id="playWhite">Play as White</button>
@@ -142,7 +140,7 @@
   </div>
 
   <!-- Main content -->
-  <div class="main-content">
+  <div class="main-content" id="mainContent">
     <div id="board1"></div>
 
     <br>
@@ -152,13 +150,6 @@
     </div>
   </div>
 
-  <!-- Toggle Sidebar Script -->
-  <script>
-    function toggleSidebar() {
-      const sidebar = document.getElementById("mySidebar");
-      sidebar.classList.toggle("closed");
-    }
-  </script>
   <div class="modal fade" id="promotionModal" tabindex="-1" aria-labelledby="promotionModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
@@ -181,6 +172,19 @@
       </div>
     </div>
   </div>
+
+  <!-- Toggle Sidebar Script -->
+  <script>
+    function toggleSidebar() {
+      const sidebar = document.getElementById("mySidebar");
+      sidebar.classList.toggle("closed");
+    }
+
+    // On page load, if not mobile, open the sidebar
+    if (window.innerWidth > 768) {
+      document.getElementById("mySidebar").classList.remove("closed");
+    }
+  </script>
 
   <!-- Link to play.js -->
   <script src="{{ url_for('static', filename='js/play.js') }}"></script>
