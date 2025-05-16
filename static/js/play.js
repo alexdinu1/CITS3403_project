@@ -676,21 +676,20 @@ function showCheckmateOptions() {
     $('body').append(modalHtml);
 
     // Add event listeners for the buttons
-    $('#reviewGameButton').click(() => {
+    $(document).on('click', '#reviewGameButton', function() {
         closeCheckmateModal(); // Close the modal
         // Do nothing, just leave the board as it is
     });
 
-    $('#playAgainButton').click(() => {
-        location.reload(); // Refresh the page to start a new game
-    }
-    );
-
-    $('#newGameButton').click(() => {
+    $(document).on('click', '#playAgainButton', function() {
         location.reload(); // Refresh the page to start a new game
     });
 
-    $('#viewStatsButton').click(() => {
+    $(document).on('click', '#newGameButton', function() {
+        location.reload(); // Refresh the page to start a new game
+    });
+
+    $(document).on('click', '#viewStatsButton', function() {
         window.location.href = '/stats'; // Redirect to stats page
     });
 }
@@ -731,19 +730,19 @@ function showResignationModal(result) {
     $('body').append(modalHtml);
 
     // Add event listeners for the buttons
-    $('#reviewGameButton').click(() => {
+    $(document).on('click', '#reviewGameButton', function() {
         closeResignationModal(); // Close the modal, leave board as is
     });
 
-    $('#playAgainButton').click(() => {
+    $(document).on('click', '#playAgainButton', function() {
         location.reload(); // Refresh the page to start a new game
     });
 
-    $('#newGameButton').click(() => {
+    $(document).on('click', '#newGameButton', function() {
         location.reload(); // Refresh the page to start a new game
     });
 
-    $('#viewStatsButton').click(() => {
+    $(document).on('click', '#viewStatsButton', function() {
         window.location.href = '/stats'; // Redirect to stats page
     });
 }
@@ -782,19 +781,19 @@ function showDrawModal() {
     $('body').append(modalHtml);
 
     // Add event listeners for the buttons
-    $('#reviewGameButton').click(() => {
+    $(document).on('click', '#reviewGameButton', function() {
         closeDrawModal(); // Close the modal, leave board as is
     });
 
-    $('#playAgainButton').click(() => {
+    $(document).on('click', '#playAgainButton', function() {
         location.reload(); // Refresh the page to start a new game
     });
 
-    $('#newGameButton').click(() => {
+    $(document).on('click', '#newGameButton', function() {
         location.reload(); // Refresh the page to start a new game
     });
 
-    $('#viewStatsButton').click(() => {
+    $(document).on('click', '#viewStatsButton', function() {
         window.location.href = '/stats'; // Redirect to stats page
     });
 }
